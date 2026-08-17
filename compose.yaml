@@ -1,0 +1,112 @@
+# millwright — every service on srv1491903 runs from this file (single process
+# manager, product invariant). Only caddy publishes ports; everything else is
+# reachable through it or via `docker exec`.
+#
+# Secrets arrive as env files under /srv/secrets (chmod 700/600), never as
+# `environment:` literals — `docker exec todo …` (the todo MCP adapter path)
+# inherits the container env, so TODO_TOKEN appears on no command line.
+#
+# MVP-cliff note: base images are tag-pinned, not digest-pinned. Pin by digest
+# (FROM node:24-slim@sha256:…) before promoting past prototype.
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/srv/sites:ro
+      - myron-client-dist:/srv/exploring-elan:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  todo:
+    build:
+      context: /opt/todo/current
+      dockerfile_inline: |
+        FROM node:24-slim
+        # sqlite3 CLI (~2 MB) for the atomic nightly `.backup` (backup.sh)
+        RUN apt-get update && apt-get install -y --no-install-recommends sqlite3 \
+            && rm -rf /var/lib/apt/lists/*
+        WORKDIR /app
+        COPY package.json package-lock.json ./
+        RUN npm ci --omit=dev
+        COPY . .
+        CMD ["node", "src/main.ts"]
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8787"
+      TODO_DB: /data/todo.db
+    env_file:
+      - /srv/secrets/todo.env # TODO_TOKEN
+    volumes:
+      - todo-data:/data
+    expose:
+      - "8787"
+
+  myron-api:
+    build:
+      context: /var/www/exploring-elan/api
+      dockerfile_inline: |
+        FROM node:22-slim
+        WORKDIR /app/api
+        COPY package.json package-lock.json ./
+        RUN npm ci
+        COPY . .
+        CMD ["npx", "tsx", "src/index.ts"]
+    restart: unless-stopped
+    env_file:
+      - path: /srv/secrets/myron-api.env # exists-but-empty today; confirm at cutover
+        required: false
+    volumes:
+      # Notes/Books live outside the build context; the api reads ../data
+      - /var/www/exploring-elan/data:/app/data
+    expose:
+      - "3001"
+
+  myron-bot:
+    build:
+      context: /var/www/exploring-elan/bot
+      dockerfile_inline: |
+        FROM node:22-slim
+        WORKDIR /app/bot
+        COPY package.json package-lock.json ./
+        RUN npm ci
+        COPY . .
+        CMD ["npx", "tsx", "src/index.ts"]
+    restart: unless-stopped
+    env_file:
+      - /srv/secrets/myron-bot.env # DISCORD_BOT_TOKEN, OPENROUTER_API_KEY, whitelists
+    volumes:
+      - /var/www/exploring-elan/data:/app/data
+
+  # litellm — retired to cold storage (decision 10). Config kept in litellm/.
+  # Uncomment to resurrect; master key comes from /srv/secrets/litellm.env.
+  # litellm:
+  #   image: ghcr.io/berriai/litellm:main-stable
+  #   restart: unless-stopped
+  #   command: ["--config", "/app/config.yaml", "--port", "4000"]
+  #   env_file:
+  #     - /srv/secrets/litellm.env # LITELLM_MASTER_KEY
+  #   volumes:
+  #     - ./litellm/config.yaml:/app/config.yaml:ro
+  #   expose:
+  #     - "4000"
+
+volumes:
+  todo-data:
+  caddy-data:
+  caddy-config:
+  # The myron client ships as built `dist` files, rsync'd from the laptop to
+  # the host path below (deploy step); caddy serves them read-only.
+  myron-client-dist:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/www/exploring-elan/client/dist

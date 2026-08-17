@@ -1,0 +1,37 @@
+# millwright — the single web entry point. Caddy handles TLS (ACME built in),
+# static files, and reverse proxying; certs persist in the caddy-data volume.
+# Routing mirrors the retired nginx vhosts, verified against the box 2026-08-17.
+
+vawagners.cloud {
+	root * /srv/sites/vawagners
+	file_server
+}
+
+www.vawagners.cloud {
+	redir https://vawagners.cloud{uri} permanent
+}
+
+todo.vawagners.cloud {
+	reverse_proxy todo:8787
+}
+
+exploring-elan.vawagners.cloud {
+	handle /api/* {
+		# path passed through unchanged — the api expects the /api prefix
+		reverse_proxy myron-api:3001
+	}
+	handle {
+		root * /srv/exploring-elan
+		# SPA fallback, as nginx did
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+fiddlesticks.vawagners.cloud {
+	root * /srv/sites/fiddlesticks
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	try_files {path} /index.html
+	file_server
+}

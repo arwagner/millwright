@@ -1,0 +1,47 @@
+# litellm — COLD STORAGE (decision 10: the service is retired; config kept so
+# it can be resurrected by uncommenting the compose service).
+# All keys come from the environment (/srv/secrets/litellm.env) — the live
+# box's copy had them inline; they were masked at fetch and must never return.
+# Rotate the old master key: it was weak (17 chars) and is considered burned.
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  forward_client_headers_to_llm_api: true
+  use_chat_completions_url_for_anthropic_messages: true
+
+model_list:
+  - model_name: cheap
+    litellm_params:
+      model: openrouter/anthropic/claude-3-haiku
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: balanced
+    litellm_params:
+      model: openrouter/anthropic/claude-sonnet-4.6
+      api_base: https://openrouter.ai/api/v1
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: deep
+    litellm_params:
+      model: openrouter/anthropic/claude-3-opus
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: fast
+    litellm_params:
+      model: openrouter/openai/gpt-4o-mini
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: haiku
+    litellm_params:
+      model: openrouter/anthropic/claude-3-haiku
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: sonnet
+    litellm_params:
+      model: openrouter/anthropic/claude-3.5-sonnet
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: opus
+    litellm_params:
+      model: openrouter/anthropic/claude-3-opus
+      api_key: os.environ/OPENROUTER_API_KEY
