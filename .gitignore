@@ -1,0 +1,13 @@
+# Secrets and state never enter this public repo (constitution non-negotiable).
+backend.hcl
+terraform.tfstate*
+**/terraform.tfstate*
+*.env
+**/*.env
+.terraform/
+.terraform.lock.hcl
+
+# Working notes
+.scratchpad/
+
+# spec-flow generated files are ignored via spec/.gitignore

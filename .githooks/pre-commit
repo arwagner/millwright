@@ -1,0 +1,12 @@
+#!/bin/sh
+# Reject any staged file that must never land in this public repo.
+# Belt and suspenders on top of .gitignore: an explicit `git add -f` or a
+# mismatched glob still gets stopped here.
+bad=$(git diff --cached --name-only | grep -E '(^|/)(backend\.hcl)$|\.env$|tfstate')
+if [ -n "$bad" ]; then
+  echo "pre-commit: refusing to commit secret-bearing files:" >&2
+  echo "$bad" >&2
+  echo "Unstage them (git restore --staged <file>) and keep them out of the repo." >&2
+  exit 1
+fi
+exit 0
