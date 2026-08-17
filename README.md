@@ -97,7 +97,6 @@ Names, for the grep in `scripts/verify.sh`:
 - **Base images are tag-pinned, not digest-pinned** — pin by digest before this leaves prototype.
 - **Dropbox is sync, not backup** — a local delete propagates everywhere.
 - **The myron client ships as `dist` only** — a rebuild depends on the laptop's build toolchain.
-- **DNS adoption is manual-first**: the provider can't import or update records. Delete the
-  existing records in the Hostinger panel, then `terraform apply`. Live DNS showed five records
-  on 2026-08-17 (apex, www, todo, exploring-elan, fiddlesticks) — reconcile against the panel
-  before deleting anything.
+- **DNS adoption is manual-first**: the provider can't import or update records. Delete all seven
+  records in the Hostinger panel (the five above plus the dead `n8n` and `llm` pointers, dropped
+  by decision 2026-08-17), then `terraform apply` recreates exactly the five in `dns.tf`.

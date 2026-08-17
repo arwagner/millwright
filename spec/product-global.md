@@ -27,9 +27,10 @@ nightly backup.
 ## Product invariants
 - The IP address 187.124.159.132 does not change across rebuilds.
 - Terraform owns every DNS record for vawagners.cloud; nothing else creates or edits them. The
-  record set (verified against live DNS 2026-08-17): A records at the apex, todo, exploring-elan,
-  and fiddlesticks, plus www (currently a CNAME to the apex). The design doc says "six" — reconcile
-  the count in the Hostinger panel before the DNS adoption.
+  record set (reconciled against the Hostinger panel 2026-08-17): A records at the apex, todo,
+  exploring-elan, and fiddlesticks, plus www (currently a CNAME to the apex). The panel's two
+  extra records, n8n and llm, point at the box with nothing behind them — Andrew approved dropping
+  both at the DNS adoption, so they are deleted and not recreated.
 - Docker Compose is the only process manager on the box — no systemd app units, no PM2.
 - Each hostname serves exactly its assigned target: vawagners.cloud (static), todo.vawagners.cloud
   (proxy to todo:8787), exploring-elan.vawagners.cloud (static client + /api/* to myron-api:3001),

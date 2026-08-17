@@ -81,8 +81,9 @@ service; two laptop-side scripts for rebuild and nightly backup. Design decision
 - The nightly backup skips silently when the laptop is asleep or the box is down — no retry, no
   alert at prototype depth.
 - No backup retention policy is stated; snapshots accumulate in Dropbox until pruned by hand.
-- Live DNS shows five records, not the design doc's six, and fiddlesticks already exists —
-  reconcile the record list in the Hostinger panel before the DNS adoption (hs-1).
+- DNS reconciled 2026-08-17: the panel held seven records — the five Terraform declares plus two
+  dead pointers (n8n, llm) with nothing behind them. Andrew approved dropping both at the DNS
+  adoption (hs-1): all seven get deleted in the panel, five come back via terraform apply.
 
 ## Open questions
 - None — the two human calls (DNS adoption, cutover) are tracked as sign-offs hs-1 and hs-2 in the

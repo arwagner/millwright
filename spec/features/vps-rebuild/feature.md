@@ -18,7 +18,7 @@ readiness:
   tasks:    draft
 gate:
   analyze: pass
-  product_global_hash: "sha256:d61dce3238ab"
+  product_global_hash: "sha256:9f31328a8e60"
   constitution_hash: "sha256:0caed037eb38"
 human_signoff:
   - { id: hs-1, description: "Approve the DNS adoption: delete the five existing records in the Hostinger panel, then run the first terraform apply", owner: "Andrew", resolved: false }
