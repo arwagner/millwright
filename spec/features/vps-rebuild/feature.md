@@ -1,0 +1,39 @@
+---
+schema_version: 2
+id: "feat-001"
+slug: "vps-rebuild"
+title: "Rebuild srv1491903 from code"
+status: active
+owner: "Andrew"
+depth: "prototype"
+sprint: null
+external: null
+depends_on: []
+requires_design: null
+readiness:
+  research: ready
+  design:   n/a
+  spec:     ready
+  plan:     ready
+  tasks:    draft
+gate:
+  analyze: pass
+  product_global_hash: "sha256:d61dce3238ab"
+  constitution_hash: "sha256:0caed037eb38"
+human_signoff:
+  - { id: hs-1, description: "Approve the DNS adoption: delete the five existing records in the Hostinger panel, then run the first terraform apply", owner: "Andrew", resolved: false }
+  - { id: hs-2, description: "Approve the cutover: delete ollama and litellm, recreate the box, deploy onto Compose", owner: "Andrew", resolved: false }
+open_decisions: []
+overrides:
+  - { id: ov-1, gate: open-items, by: "Andrew", reason: "hs-1 (DNS adoption) and hs-2 (cutover) gate only the final live tasks T11/T12; authoring tasks T1-T10 touch nothing live", at: "2026-08-17", resolved: false }
+extends: []
+---
+
+# Feature notes — Rebuild srv1491903 from code
+
+- Source design: `.scratchpad/iac-design.md` (full inventory, decisions 1–16, risks, build order).
+- Build order steps 1–3 (authoring the repo) change nothing on the live box and need no approval.
+  Steps 4–5 are the two sign-offs above (`hs-1` DNS adoption, `hs-2` cutover) — the constitution
+  makes them ask-first regardless of prototype depth.
+- Sixteen design decisions are already made and recorded in the scratchpad doc; the spec references
+  them rather than reopening them.
