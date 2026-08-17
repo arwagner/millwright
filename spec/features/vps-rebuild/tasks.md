@@ -46,9 +46,15 @@ Glyphs: `[x]` done · `[ ]` not started · `[~]` in progress · `[-]` n/a · `[H
   full bootstrap.sh as post-install content, so the uploaded script is a stub that fetches it
   from the public repo (see terraform/bootstrap.tf). `myron/api/.env` emptiness check moved to
   T12 pre-cutover (it belongs there).
-- [H] T12: Cutover (hs-2) — on approval, on a free evening: fresh backup, `rebuild.sh`,
-  `bootstrap.sh`, deploy myron (rsync, `--exclude='*.png'`) and todo (git push), copy secrets to
-  `/srv/secrets/` and `chmod 700 /srv/secrets && chmod 600 /srv/secrets/*.env`, restore todo.db +
-  cert volume, `docker compose up -d --build`, then run the
+- [x] T12: Cutover (hs-2) — DONE 2026-08-17, approved and observed by Andrew. Harvested secrets,
+  todo.db (cold, service stopped), and source trees to Dropbox first; recreated via the API
+  (template 1077, post-install stub ran bootstrap); restored sources, secrets (chmod 700/600),
+  and todo.db; `docker compose up -d --build` brought up all four services. AC-10 verified: same
+  IP, four hostnames 200 over fresh HTTPS certs, www redirects, `ps` clean of TODO_TOKEN,
+  pm2/nginx/ollama absent, MCP adapter answers via docker exec. Notes: TODO_TOKEN was re-minted
+  (the old one lived only in the wiped box's root env); Books deliberately not restored to the
+  box (deferred-work item 1 done by omission); cert volume backup + laptop launchd job installed
+  and proven with one real run. Original step list, for reference: fresh backup, `rebuild.sh`,
+  `bootstrap.sh`, deploy myron and todo, copy secrets, restore data, compose up, then run the
   AC-10 manual checks (four hostnames, `ps` free of TODO_TOKEN, no pm2/nginx/ollama). Rotate the
   litellm master key.

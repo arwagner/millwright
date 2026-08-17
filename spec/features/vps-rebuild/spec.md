@@ -33,35 +33,35 @@ service; two laptop-side scripts for rebuild and nightly backup. Design decision
     raw file copy) and the Caddy certificate volume land in Dropbox.
 
 ## Acceptance criteria
-- [ ] AC-1: `terraform validate` passes in `terraform/`; the provider is pinned exactly to
+- [x] AC-1: `terraform validate` passes in `terraform/`; the provider is pinned exactly to
   `hostinger/hostinger = 0.1.22`; no `hostinger_vps` resource exists in any `.tf` file.
-- [ ] AC-2: `terraform/dns.tf` declares exactly the record set from the product-global DNS
+- [x] AC-2: `terraform/dns.tf` declares exactly the record set from the product-global DNS
   invariant — A records for the apex, todo, exploring-elan, and fiddlesticks pointing at
   187.124.159.132, plus a www record answering for the apex — and no others.
-- [ ] AC-3: `bash -n bootstrap.sh` passes, and the script installs docker, writes
+- [x] AC-3: `bash -n bootstrap.sh` passes, and the script installs docker, writes
   `authorized_keys`, clones millwright over HTTPS with no credential, configures ufw to allow
   only ports 22, 80, and 443 in and deny everything else, and sets
   `PasswordAuthentication no` in `sshd_config`.
-- [ ] AC-4: `docker compose config` succeeds on `compose.yaml`; it defines caddy, todo, myron-api,
+- [x] AC-4: `docker compose config` succeeds on `compose.yaml`; it defines caddy, todo, myron-api,
   and myron-bot with restart policies; litellm appears only as commented-out text; no service
   other than caddy maps a host port (`ports:`).
-- [ ] AC-5: The Caddyfile validates (`caddy validate`), maps each of the four hostnames to its
+- [x] AC-5: The Caddyfile validates (`caddy validate`), maps each of the four hostnames to its
   assigned target from the product-global hostname invariant, and redirects www.vawagners.cloud to
   the apex.
-- [ ] AC-6: `scripts/rebuild.sh` calls the Hostinger VPS `recreate` API endpoint and contains no
+- [x] AC-6: `scripts/rebuild.sh` calls the Hostinger VPS `recreate` API endpoint and contains no
   subscription create, destroy, or cancel call.
-- [ ] AC-7: `scripts/backup.sh` passes `bash -n`, takes the `todo.db` snapshot via
+- [x] AC-7: `scripts/backup.sh` passes `bash -n`, takes the `todo.db` snapshot via
   `docker exec … sqlite3 ".backup"`, and copies the snapshot and the Caddy certificate volume to
   Dropbox; the README documents the launchd schedule.
-- [ ] AC-8: A clean checkout contains no secret: `.gitignore` covers `backend.hcl`,
+- [x] AC-8: A clean checkout contains no secret: `.gitignore` covers `backend.hcl`,
   `terraform.tfstate*`, and `*.env` (including nested paths); a pre-commit hook rejects staged
   `*.env`, `backend.hcl`, and `*tfstate*` files; and no value of the six named secrets
   (`DISCORD_BOT_TOKEN`, `OPENROUTER_API_KEY`, `CHANNEL_WHITELIST`, `DM_WHITELIST`, `TODO_TOKEN`,
   the litellm `master_key`) appears in any tracked file, `litellm/config.yaml` included.
-- [ ] AC-9: `README.md` contains the numbered rebuild runbook (the nine steps), the
+- [x] AC-9: `README.md` contains the numbered rebuild runbook (the nine steps), the
   `~/.claude.json` todo MCP snippet, and a note confirming that adding a new static or proxied
   service touches only `compose.yaml` and the Caddyfile.
-- [ ] AC-10: (manual) After the approved cutover, one real rebuild completes: same IP, all four
+- [x] AC-10: (manual) After the approved cutover, one real rebuild completes: same IP, all four
   hostnames answer over HTTPS, `todo.db` restored, `pm2`/`nginx`/`ollama` no longer run on the
   box, and `TODO_TOKEN` appears in no process command line (`ps axww | grep TODO_TOKEN` finds
   nothing).
