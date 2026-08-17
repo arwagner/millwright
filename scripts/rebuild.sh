@@ -41,9 +41,15 @@ echo "This wipes the box and deletes its snapshots. The IP stays the same."
 read -r -p "Type 'rebuild' to proceed: " answer
 [ "$answer" = "rebuild" ] || { echo "aborted"; exit 1; }
 
+# Optional: POST_INSTALL_SCRIPT_ID (terraform output post_install_script_id)
+# makes the recreate run bootstrap automatically.
+payload="{\"template_id\": $TEMPLATE_ID}"
+[ -n "${POST_INSTALL_SCRIPT_ID:-}" ] &&
+  payload="{\"template_id\": $TEMPLATE_ID, \"post_install_script_id\": $POST_INSTALL_SCRIPT_ID}"
+
 curl -sfS "${auth[@]}" \
   -H "Content-Type: application/json" \
   -X POST "$API/virtual-machines/$VM_ID/recreate" \
-  -d "{\"template_id\": $TEMPLATE_ID}"
+  -d "$payload"
 echo
 echo "recreate requested. When the box is up: ssh root@187.124.159.132 'bash -s' < bootstrap.sh"

@@ -21,7 +21,7 @@ gate:
   product_global_hash: "sha256:9f31328a8e60"
   constitution_hash: "sha256:0caed037eb38"
 human_signoff:
-  - { id: hs-1, description: "Approve the DNS adoption: delete the five existing records in the Hostinger panel, then run the first terraform apply", owner: "Andrew", resolved: false }
+  - { id: hs-1, description: "Approve the DNS adoption: delete the five existing records in the Hostinger panel, then run the first terraform apply", owner: "Andrew", resolved: true }
   - { id: hs-2, description: "Approve the cutover: delete ollama and litellm, recreate the box, deploy onto Compose", owner: "Andrew", resolved: false }
 open_decisions: []
 overrides:
@@ -37,3 +37,8 @@ extends: []
   makes them ask-first regardless of prototype depth.
 - Sixteen design decisions are already made and recorded in the scratchpad doc; the spec references
   them rather than reopening them.
+- Provider quirk (0.1.22): `hostinger_vps_ssh_key` is destroyed and recreated on every apply
+  (read drift). Harmless — same key content, new id each time — but noisy; revisit at promote.
+- Cloudflare's WAF on the Hostinger API rejects the full bootstrap.sh as post-install content;
+  terraform uploads a two-line stub that fetches the real script from the public repo. The stub
+  only works once the repo is pushed to GitHub; until then runbook step 3 (SSH) is the path.

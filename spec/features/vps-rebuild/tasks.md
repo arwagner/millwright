@@ -39,9 +39,13 @@ Glyphs: `[x]` done · `[ ]` not started · `[~]` in progress · `[-]` n/a · `[H
 - [x] T10: Write `scripts/verify.sh` running every offline check from the plan's verification
   table, each printing its `feat-001/AC-N` token; run it and get all green. Also confirm AC-8's
   secret scan passes. (AC-1..AC-9)
-- [H] T11: DNS adoption (hs-1) — reconcile the record list in the Hostinger panel against plan D2
-  (design doc said six, live shows five), confirm `myron/api/.env` on the box is empty, then on
-  approval: delete the panel records and run the first `terraform apply`.
+- [x] T11: DNS adoption (hs-1) — DONE 2026-08-17. Panel held seven records (five real + dead n8n
+  and llm); Andrew approved dropping the two and deleted all seven in the panel; first
+  `terraform apply` recreated the five records + SSH key + post-install stub (id 5136); all five
+  hostnames verified resolving on the authoritative nameservers. Note: Cloudflare's WAF 403s the
+  full bootstrap.sh as post-install content, so the uploaded script is a stub that fetches it
+  from the public repo (see terraform/bootstrap.tf). `myron/api/.env` emptiness check moved to
+  T12 pre-cutover (it belongs there).
 - [H] T12: Cutover (hs-2) — on approval, on a free evening: fresh backup, `rebuild.sh`,
   `bootstrap.sh`, deploy myron (rsync, `--exclude='*.png'`) and todo (git push), copy secrets to
   `/srv/secrets/` and `chmod 700 /srv/secrets && chmod 600 /srv/secrets/*.env`, restore todo.db +
