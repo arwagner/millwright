@@ -13,12 +13,15 @@ mkdir -p /root/.ssh && chmod 700 /root/.ssh
 grep -qF "$AUTHORIZED_KEY" /root/.ssh/authorized_keys 2>/dev/null ||
   echo "$AUTHORIZED_KEY" >> /root/.ssh/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
-sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+# A drop-in that sorts first: cloud-init ships 50-cloud-init.conf with
+# "PasswordAuthentication yes", and sshd takes the FIRST match across the
+# included files — editing the main sshd_config alone does not win.
+printf 'PasswordAuthentication no\n' > /etc/ssh/sshd_config.d/00-millwright.conf
 systemctl restart ssh
 
 # --- Firewall: only SSH and Caddy answer from the internet ------------------
 apt-get update -qq
-apt-get install -y -qq ufw git curl
+apt-get install -y -qq ufw git curl rsync
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp

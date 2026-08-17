@@ -25,6 +25,8 @@ services:
       - caddy-config:/config
 
   todo:
+    # Stable name: backup.sh and the ~/.claude.json MCP snippet `docker exec todo …`
+    container_name: todo
     build:
       context: /opt/todo/current
       dockerfile_inline: |
