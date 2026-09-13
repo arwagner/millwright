@@ -41,6 +41,8 @@ spec/             spec-flow workspace (specs, plans, gates)
    `chmod 700 /srv/secrets && chmod 600 /srv/secrets/*.env`.
 7. Restore data: copy the `todo.db` snapshot into the `todo-data` volume; untar the cert backup
    into the `caddy-data` volume (skips Let's Encrypt reissue — five duplicate certs/week limit).
+   Nothing restores `myron-auth` (exploring-elan's logins) — it is deliberately not backed up, so
+   recreate accounts by hand: `docker compose exec myron-api npm run users -- add <name>`.
 8. `cd /srv/millwright && docker compose up -d --build`.
 9. Check each hostname over HTTPS; on the box, `ps axww | grep TODO_TOKEN` must find nothing and
    `pm2`/`nginx`/`ollama` must not exist.

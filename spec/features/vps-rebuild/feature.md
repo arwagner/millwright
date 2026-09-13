@@ -17,13 +17,14 @@ readiness:
   plan:     ready
   tasks:    ready
 gate:
-  analyze: pass
+  analyze: not-run
   product_global_hash: "sha256:9f31328a8e60"
   constitution_hash: "sha256:0caed037eb38"
 human_signoff:
   - { id: hs-1, description: "Approve the DNS adoption: delete the five existing records in the Hostinger panel, then run the first terraform apply", owner: "Andrew", resolved: true }
   - { id: hs-2, description: "Approve the cutover: delete ollama and litellm, recreate the box, deploy onto Compose", owner: "Andrew", resolved: true }
-open_decisions: []
+open_decisions:
+  - { id: od-1, description: "chg-001: back the myron-auth volume up nightly and restore it during a rebuild, or accept that a rebuild loses exploring-elan's accounts and recreate them by hand", owner: "Andrew", resolved: true, decision: "Accept the loss: one account, recreated with a single command. Recorded as a sharp edge in spec.md and in runbook step 7; revisit if the accounts stop being trivially recreatable.", at: "2026-09-12" }
 overrides:
   - { id: ov-1, gate: open-items, by: "Andrew", reason: "hs-1 (DNS adoption) and hs-2 (cutover) gate only the final live tasks T11/T12; authoring tasks T1-T10 touch nothing live", at: "2026-08-17", resolved: true }
 extends: []

@@ -62,12 +62,20 @@ services:
         COPY . .
         CMD ["npx", "tsx", "src/index.ts"]
     restart: unless-stopped
+    environment:
+      # The api marks the session cookie Secure only when this is production.
+      NODE_ENV: production
+      # Accounts for the book-text search gate. The api image is rebuilt from an
+      # rsync'd build context, so anything written inside the container is lost
+      # on `up --build`; the named volume below is what makes logins survive.
+      AUTH_DB_PATH: /auth/auth.sqlite
     env_file:
       - path: /srv/secrets/myron-api.env # exists-but-empty today; confirm at cutover
         required: false
     volumes:
       # Notes/Books live outside the build context; the api reads ../data
       - /var/www/exploring-elan/data:/app/data
+      - myron-auth:/auth
     expose:
       - "3001"
 
@@ -104,6 +112,10 @@ volumes:
   todo-data:
   caddy-data:
   caddy-config:
+  # Usernames and password hashes for exploring-elan's book-text search. Not in
+  # the image and not under /var/www, so neither `up --build` nor the laptop's
+  # `rsync --delete` of the build context can take the accounts with it.
+  myron-auth:
   # The myron client ships as built `dist` files, rsync'd from the laptop to
   # the host path below (deploy step); caddy serves them read-only.
   myron-client-dist:

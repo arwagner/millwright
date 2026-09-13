@@ -58,3 +58,12 @@ Glyphs: `[x]` done · `[ ]` not started · `[~]` in progress · `[-]` n/a · `[H
   `bootstrap.sh`, deploy myron and todo, copy secrets, restore data, compose up, then run the
   AC-10 manual checks (four hostnames, `ps` free of TODO_TOKEN, no pm2/nginx/ollama). Rotate the
   litellm master key.
+
+- [x] T13: Add `scripts/verify.sh` checks for the account volume (chg-001): from
+  `docker compose config --format json`, assert `myron-api` mounts `myron-auth`, that its
+  `AUTH_DB_PATH` points inside that mount, that `NODE_ENV` is `production`, and that it still
+  declares no `ports:`. Each prints `feat-001/AC-11`. (AC-11)
+- [x] T14: Note in `README.md` that exploring-elan's accounts live in the `myron-auth` volume and
+  are not restored by a rebuild — recreate them with
+  `docker compose exec myron-api npm run users -- add <name>`. Fold into the existing runbook step 7
+  rather than adding a step: AC-9 asserts the runbook has nine. (AC-9, AC-11)

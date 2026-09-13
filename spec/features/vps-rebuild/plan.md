@@ -27,9 +27,14 @@ This plan states the remaining HOW and the build order. Source code lives at the
   delivers (`/opt/todo`, `/var/www/exploring-elan`); secrets via `env_file:` pointing at
   `/srv/secrets/*.env` (never `environment:` literals — keeps them out of `ps` and the repo; and
   `docker exec` into the todo container inherits that env, which is what removes `TODO_TOKEN`
-  from any command line and closes AC-10's `ps` check); named volumes `todo-data`, `caddy-data`
-  (certs), and `myron-client-dist` — the last mounted read-only into caddy and populated from the
-  myron client's `dist` at deploy, the shared contract between T4 and T5. **No service other than
+  from any command line and closes AC-10's `ps` check). An `environment:` block is permitted for
+  values that are *not* secret — a mode flag or a path inside the container; `myron-api` uses it
+  for `NODE_ENV` and `AUTH_DB_PATH` (chg-001). A secret value there stays forbidden. Named volumes
+  `todo-data`, `caddy-data` (certs), `myron-client-dist`, and `myron-auth` — `myron-client-dist` is
+  mounted read-only into caddy and populated from the myron client's `dist` at deploy, the shared
+  contract between T4 and T5; `myron-auth` holds exploring-elan's usernames and password hashes and
+  is a plain named volume precisely so it sits outside both the image and the tree the laptop
+  mirrors with `rsync --delete` (chg-001). **No service other than
   caddy declares `ports:`.** Base images carry an MVP-cliff note: pin by digest before promote.
   The todo image installs `sqlite3` (~2 MB) for the atomic backup.
 - **D5 — rebuild.sh** is a curl call to the Hostinger API `recreate` endpoint with
@@ -73,3 +78,4 @@ invocations) and, for AC-10, the public HTTPS endpoints.
 | AC-8 | `git check-ignore backend.hcl terraform/backend.hcl terraform.tfstate x.env sub/dir/x.env`; the pre-commit hook exists and rejects a staged `.env` test file; grep tracked files (litellm/config.yaml included) for the six secret names' values (names may appear, values may not) | feat-001/AC-8 |
 | AC-9 | grep README for the nine runbook steps, the `~/.claude.json` snippet, the two-file-edit note | feat-001/AC-9 |
 | AC-10 | (manual, post-cutover) curl the four hostnames over HTTPS; `ssh` in: `ps axww | grep TODO_TOKEN` empty; `pm2`/`nginx`/`ollama` absent; todo.db restored | feat-001/AC-10 |
+| AC-11 | `docker compose config --format json`: `myron-api` mounts the `myron-auth` volume, its `AUTH_DB_PATH` resolves inside that mount, `NODE_ENV` is `production`, and it still declares no `ports:` | feat-001/AC-11 |

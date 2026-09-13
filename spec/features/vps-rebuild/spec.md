@@ -26,6 +26,12 @@ service; two laptop-side scripts for rebuild and nightly backup. Design decision
     volume restored, `docker compose up -d --build`
   - Then the IP is unchanged and all four hostnames answer over HTTPS with their assigned content
     (per the product-global hostname invariant).
+- **Scenario: accounts survive a redeploy**
+  - Given an account exists on exploring-elan and the laptop runs myron's `deploy.sh`
+  - When the deploy rsyncs a new `/var/www/exploring-elan/api` build context and runs
+    `docker compose up -d --build myron-api myron-bot`
+  - Then the `myron-api` image is rebuilt from scratch and the existing account still signs in,
+    because the account database was never inside the image or the build context.
 - **Scenario: nightly backup**
   - Given the box is running and the laptop launchd job fires
   - When `scripts/backup.sh` runs
@@ -66,6 +72,12 @@ service; two laptop-side scripts for rebuild and nightly backup. Design decision
   box, and `TODO_TOKEN` appears in no process command line (`ps axww | grep TODO_TOKEN` finds
   nothing).
 
+- [x] AC-11: `compose.yaml` declares a named volume for exploring-elan's account database, mounts
+  it into `myron-api`, and sets `AUTH_DB_PATH` to a path inside that mount, so the accounts live
+  neither in the image nor under `/var/www`; the same service sets `NODE_ENV: production` (the api
+  reads it to mark the session cookie `Secure`). `docker compose config` still succeeds and
+  `myron-api` still declares no `ports:`.
+
 ## Known sharp edges (prototype)
 - The provider is community-tier 0.x; the exact pin is the only protection against a breaking release.
 - The `recreate` endpoint deletes Hostinger snapshots — snapshots cannot protect the rebuild itself.
@@ -81,6 +93,11 @@ service; two laptop-side scripts for rebuild and nightly backup. Design decision
 - The nightly backup skips silently when the laptop is asleep or the box is down — no retry, no
   alert at prototype depth.
 - No backup retention policy is stated; snapshots accumulate in Dropbox until pruned by hand.
+- exploring-elan's accounts (the `myron-auth` volume) are the one piece of durable state the nightly
+  backup does not cover, so a rebuild loses every login. Accepted deliberately (od-1, 2026-09-12):
+  the site has a single account and recreating it is one command,
+  `docker compose exec myron-api npm run users -- add <name>`, which runbook step 7 now states.
+  Revisit if exploring-elan ever has accounts that are not trivially recreatable.
 - DNS reconciled 2026-08-17: the panel held seven records — the five Terraform declares plus two
   dead pointers (n8n, llm) with nothing behind them. Andrew approved dropping both at the DNS
   adoption (hs-1): all seven get deleted in the panel, five come back via terraform apply.

@@ -48,6 +48,25 @@ assert [k for k,v in s.items() if v.get(\"ports\")] == [\"caddy\"]
 '" _ "$CJSON"
 check feat-001/AC-4 "litellm only in comments"      bash -c 'grep -q "# litellm:" compose.yaml && ! echo "$CJSON" | grep -q litellm'
 
+# ---- feat-001/AC-11 (chg-001): myron-api keeps accounts in a named volume, runs as production
+check feat-001/AC-11 "account db in a named volume, outside the image" bash -c "echo \"\$1\" | python3 -c '
+import json,sys
+api=json.load(sys.stdin)[\"services\"][\"myron-api\"]
+mounts=api.get(\"volumes\",[])
+auth=[m for m in mounts if m.get(\"type\")==\"volume\" and m.get(\"source\")==\"myron-auth\"]
+assert len(auth)==1, mounts
+target=auth[0][\"target\"].rstrip(\"/\")
+env=api.get(\"environment\",{})
+path=env.get(\"AUTH_DB_PATH\",\"\")
+assert path.startswith(target+\"/\"), (path, target)
+assert env.get(\"NODE_ENV\")==\"production\", env.get(\"NODE_ENV\")
+assert not api.get(\"ports\"), api.get(\"ports\")
+'" _ "$CJSON"
+check feat-001/AC-11 "myron-auth declared as a volume"  bash -c "echo \"\$1\" | python3 -c '
+import json,sys
+assert \"myron-auth\" in json.load(sys.stdin).get(\"volumes\",{})
+'" _ "$CJSON"
+
 # ---- feat-001/AC-5: caddyfile valid, four hostnames + www redirect
 check feat-001/AC-5 "caddy validate"                docker run --rm -v "$PWD/caddy/Caddyfile":/etc/caddy/Caddyfile:ro caddy:2 caddy validate --config /etc/caddy/Caddyfile
 for h in vawagners.cloud todo.vawagners.cloud exploring-elan.vawagners.cloud fiddlesticks.vawagners.cloud; do
