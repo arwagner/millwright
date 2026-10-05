@@ -54,11 +54,13 @@ services:
   myron-api:
     build:
       context: /var/www/exploring-elan/api
+      # --ignore-scripts: better-sqlite3 13 ships linux prebuilds but npm still
+      # runs an implicit node-gyp rebuild, which fails without python.
       dockerfile_inline: |
         FROM node:26-slim
         WORKDIR /app/api
         COPY package.json package-lock.json ./
-        RUN npm ci
+        RUN npm ci --ignore-scripts
         COPY . .
         CMD ["npx", "tsx", "src/index.ts"]
     restart: unless-stopped
