@@ -55,7 +55,7 @@ services:
     build:
       context: /var/www/exploring-elan/api
       dockerfile_inline: |
-        FROM node:22-slim
+        FROM node:26-slim
         WORKDIR /app/api
         COPY package.json package-lock.json ./
         RUN npm ci
