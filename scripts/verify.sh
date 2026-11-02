@@ -19,12 +19,12 @@ check feat-001/AC-1 "provider pinned = 0.1.22"      grep -q 'version = "= 0.1.22
 check feat-001/AC-1 "no hostinger_vps resource"     bash -c '! grep -q "resource \"hostinger_vps\"" terraform/*.tf'
 check feat-001/AC-1 "ssh key ref ends in .pub"      bash -c 'grep -q "file(\"~/.ssh/id_ed25519.pub\")" terraform/ssh.tf && ! grep -E "file\(.*id_ed25519\"\)" terraform/ssh.tf'
 
-# ---- feat-001/AC-2: exactly the five records, all -> the box IP
-check feat-001/AC-2 "exactly 5 dns records"         bash -c '[ "$(grep -c "resource \"hostinger_dns_record\"" terraform/dns.tf)" = 5 ]'
-for n in '"@"' '"www"' '"todo"' '"exploring-elan"' '"fiddlesticks"'; do
+# ---- feat-001/AC-2: exactly the six records (chg-002 adds tiamat), all -> the box IP
+check feat-001/AC-2 "exactly 6 dns records"         bash -c '[ "$(grep -c "resource \"hostinger_dns_record\"" terraform/dns.tf)" = 6 ]'
+for n in '"@"' '"www"' '"todo"' '"exploring-elan"' '"fiddlesticks"' '"tiamat"'; do
   check feat-001/AC-2 "record name $n"              grep -q "name  = $n" terraform/dns.tf
 done
-check feat-001/AC-2 "all records -> 187.124.159.132" bash -c '[ "$(grep -c "value = local.ip" terraform/dns.tf)" = 5 ] && grep -q "ip   = \"187.124.159.132\"" terraform/dns.tf'
+check feat-001/AC-2 "all records -> 187.124.159.132" bash -c '[ "$(grep -c "value = local.ip" terraform/dns.tf)" = 6 ] && grep -q "ip   = \"187.124.159.132\"" terraform/dns.tf'
 
 # ---- feat-001/AC-3: bootstrap syntax + docker, ufw, keys, clone, sshd
 check feat-001/AC-3 "bash -n bootstrap.sh"          bash -n bootstrap.sh
@@ -67,12 +67,20 @@ import json,sys
 assert \"myron-auth\" in json.load(sys.stdin).get(\"volumes\",{})
 '" _ "$CJSON"
 
-# ---- feat-001/AC-5: caddyfile valid, four hostnames + www redirect
+# ---- feat-001/AC-5: caddyfile valid, five hostnames + www redirect
 check feat-001/AC-5 "caddy validate"                docker run --rm -v "$PWD/caddy/Caddyfile":/etc/caddy/Caddyfile:ro caddy:2 caddy validate --config /etc/caddy/Caddyfile
-for h in vawagners.cloud todo.vawagners.cloud exploring-elan.vawagners.cloud fiddlesticks.vawagners.cloud; do
+for h in vawagners.cloud todo.vawagners.cloud exploring-elan.vawagners.cloud fiddlesticks.vawagners.cloud tiamat.vawagners.cloud; do
   check feat-001/AC-5 "site $h"                     grep -q "^$h" caddy/Caddyfile
 done
 check feat-001/AC-5 "www redirects to apex"         bash -c 'grep -A1 "^www.vawagners.cloud" caddy/Caddyfile | grep -q "redir https://vawagners.cloud"'
+
+# ---- feat-001/AC-12 (chg-002): tiamat wiki served read-only from a host path
+check feat-001/AC-12 "caddy mounts /var/www/tiamat read-only" bash -c "echo \"\$1\" | python3 -c '
+import json,sys
+m=[v for v in json.load(sys.stdin)[\"services\"][\"caddy\"][\"volumes\"] if v.get(\"source\")==\"/var/www/tiamat\"]
+assert len(m)==1 and m[0][\"target\"]==\"/srv/tiamat\" and m[0].get(\"read_only\"), m
+'" _ "$CJSON"
+check feat-001/AC-12 "tiamat site serves /srv/tiamat" bash -c 'grep -A2 "^tiamat.vawagners.cloud" caddy/Caddyfile | grep -q "root \* /srv/tiamat"'
 
 # ---- feat-001/AC-6: rebuild.sh uses recreate, never touches the subscription
 check feat-001/AC-6 "bash -n rebuild.sh"            bash -n scripts/rebuild.sh

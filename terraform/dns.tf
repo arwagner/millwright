@@ -47,3 +47,12 @@ resource "hostinger_dns_record" "fiddlesticks" {
   value = local.ip
   ttl   = 300
 }
+
+resource "hostinger_dns_record" "tiamat" {
+  # chg-002: the Tiamat campaign wiki (static, rsync'd from the laptop).
+  zone  = local.zone
+  name  = "tiamat"
+  type  = "A"
+  value = local.ip
+  ttl   = 300
+}

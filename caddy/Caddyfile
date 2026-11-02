@@ -35,3 +35,11 @@ fiddlesticks.vawagners.cloud {
 	try_files {path} /index.html
 	file_server
 }
+
+# chg-002: Tiamat campaign wiki. Built and rsync'd from the laptop by the wiki's
+# deploy.sh into /var/www/tiamat; pages are <name>.html served at /<name>.
+tiamat.vawagners.cloud {
+	root * /srv/tiamat
+	try_files {path} {path}.html
+	file_server
+}

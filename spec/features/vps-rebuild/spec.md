@@ -42,7 +42,7 @@ service; two laptop-side scripts for rebuild and nightly backup. Design decision
 - [x] AC-1: `terraform validate` passes in `terraform/`; the provider is pinned exactly to
   `hostinger/hostinger = 0.1.22`; no `hostinger_vps` resource exists in any `.tf` file.
 - [x] AC-2: `terraform/dns.tf` declares exactly the record set from the product-global DNS
-  invariant — A records for the apex, todo, exploring-elan, and fiddlesticks pointing at
+  invariant — A records for the apex, todo, exploring-elan, fiddlesticks, and tiamat pointing at
   187.124.159.132, plus a www record answering for the apex — and no others.
 - [x] AC-3: `bash -n bootstrap.sh` passes, and the script installs docker, writes
   `authorized_keys`, clones millwright over HTTPS with no credential, configures ufw to allow
@@ -51,7 +51,7 @@ service; two laptop-side scripts for rebuild and nightly backup. Design decision
 - [x] AC-4: `docker compose config` succeeds on `compose.yaml`; it defines caddy, todo, myron-api,
   and myron-bot with restart policies; litellm appears only as commented-out text; no service
   other than caddy maps a host port (`ports:`).
-- [x] AC-5: The Caddyfile validates (`caddy validate`), maps each of the four hostnames to its
+- [x] AC-5: The Caddyfile validates (`caddy validate`), maps each of the five hostnames to its
   assigned target from the product-global hostname invariant, and redirects www.vawagners.cloud to
   the apex.
 - [x] AC-6: `scripts/rebuild.sh` calls the Hostinger VPS `recreate` API endpoint and contains no
@@ -77,6 +77,11 @@ service; two laptop-side scripts for rebuild and nightly backup. Design decision
   neither in the image nor under `/var/www`; the same service sets `NODE_ENV: production` (the api
   reads it to mark the session cookie `Secure`). `docker compose config` still succeeds and
   `myron-api` still declares no `ports:`.
+
+- [ ] AC-12: (chg-002) `compose.yaml` mounts the host path `/var/www/tiamat` read-only into caddy
+  at `/srv/tiamat`, and the Caddyfile's `tiamat.vawagners.cloud` block serves that root as static
+  files (`<name>.html` answered at `/<name>`). Content is not in this repo and is not backed up;
+  the wiki's own `deploy.sh` rebuilds and rsyncs it.
 
 ## Known sharp edges (prototype)
 - The provider is community-tier 0.x; the exact pin is the only protection against a breaking release.

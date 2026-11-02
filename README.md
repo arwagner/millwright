@@ -13,6 +13,7 @@ no credentials. Secrets live in Dropbox, never here.
 | todo.vawagners.cloud | reverse proxy to todo:8787 |
 | exploring-elan.vawagners.cloud | static client `dist`, `/api/*` to myron-api:3001 |
 | fiddlesticks.vawagners.cloud | static, `sites/fiddlesticks` |
+| tiamat.vawagners.cloud | static, `/var/www/tiamat` (rsync'd by the Tiamat wiki's `deploy.sh`) |
 
 ## Layout
 
@@ -21,7 +22,7 @@ terraform/        DNS records, SSH key, post-install script (NEVER the VPS subsc
 bootstrap.sh      blank box -> Compose host (docker, ufw, sshd hardening, clone)
 compose.yaml      caddy, todo, myron-api, myron-bot; litellm commented out
 caddy/Caddyfile   TLS (ACME), static sites, reverse proxies
-sites/            vawagners + fiddlesticks static content
+sites/            vawagners + fiddlesticks static content (tiamat lives in its own repo)
 litellm/          cold storage; every key comes from env
 scripts/          rebuild.sh, backup.sh, verify.sh, launchd plist
 spec/             spec-flow workspace (specs, plans, gates)
@@ -36,7 +37,8 @@ spec/             spec-flow workspace (specs, plans, gates)
 3. `ssh root@187.124.159.132 'bash -s' < bootstrap.sh` (skip if it ran as the post-install script).
 4. Deploy myron: `./deploy.sh` in the myron repo (rsync, `--exclude='*.png'` keeps Books off the
    wire — 9.6 GB down to ~200 MB).
-5. Deploy todo: push to the deploy remote.
+5. Deploy todo: push to the deploy remote. Deploy the Tiamat wiki: `./deploy.sh` in the wiki repo
+   (`~/Dropbox/andrew/D&D/sessions/Tiamat/wiki`).
 6. Copy secret env files from `~/Dropbox/andrew/secrets/millwright/` to `/srv/secrets/`, then
    `chmod 700 /srv/secrets && chmod 600 /srv/secrets/*.env`.
 7. Restore data: copy the `todo.db` snapshot into the `todo-data` volume; untar the cert backup

@@ -21,6 +21,8 @@ services:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./sites:/srv/sites:ro
       - myron-client-dist:/srv/exploring-elan:ro
+      # chg-002: Tiamat wiki, rsync'd from the laptop (wiki repo deploy.sh)
+      - /var/www/tiamat:/srv/tiamat:ro
       - caddy-data:/data
       - caddy-config:/config
 
