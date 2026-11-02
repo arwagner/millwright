@@ -78,7 +78,7 @@ service; two laptop-side scripts for rebuild and nightly backup. Design decision
   reads it to mark the session cookie `Secure`). `docker compose config` still succeeds and
   `myron-api` still declares no `ports:`.
 
-- [ ] AC-12: (chg-002) `compose.yaml` mounts the host path `/var/www/tiamat` read-only into caddy
+- [x] AC-12: (chg-002) `compose.yaml` mounts the host path `/var/www/tiamat` read-only into caddy
   at `/srv/tiamat`, and the Caddyfile's `tiamat.vawagners.cloud` block serves that root as static
   files (`<name>.html` answered at `/<name>`). Content is not in this repo and is not backed up;
   the wiki's own `deploy.sh` rebuilds and rsyncs it.

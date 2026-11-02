@@ -17,6 +17,6 @@ rsyncs the output to `/var/www/tiamat` on the box — the same host-path pattern
 
 ## Status
 - [ ] delta reviewed (analyze)
-- [ ] implemented & verified (verify.sh green; AC-12 live check after deploy)
+- [x] implemented & verified (verify.sh green; https://tiamat.vawagners.cloud/ answers 200, 2026-11-01)
 - [x] folded into the feature's spec.md
-- [ ] live: `terraform apply` and box `git pull && docker compose up -d caddy` — need Andrew's go-ahead
+- [x] live: `terraform apply -target=hostinger_dns_record.tiamat` and box `docker compose up -d caddy`, approved by Andrew 2026-11-01
