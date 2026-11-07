@@ -125,7 +125,7 @@ m=[f for f in ef if f[\"path\"]==\"/srv/secrets/practice-auth.env\"]
 assert len(m)==1 and m[0].get(\"required\",True) is not False, ef
 '" _ "$CJSON_REFS"
 check feat-001/AC-14 "practice block: basic_auth placeholders, proxy, no Authorization upstream" bash -c 'b=$(sed -n "/^practice.vawagners.cloud {/,/^}/p" caddy/Caddyfile); grep -q "basic_auth {" <<<"$b" && grep -q "{\$PRACTICE_AUTH_USER} {\$PRACTICE_AUTH_HASH}" <<<"$b" && grep -q "reverse_proxy practice:8770" <<<"$b" && grep -q "header_up -Authorization" <<<"$b" && ! grep -qi "permissions-policy" <<<"$b"'
-check feat-001/AC-14 "no bcrypt hash or practice password in tracked files" bash -c '! git ls-files -z | xargs -0 grep -lE "\\\$2[aby]\\\$[0-9]{2}\\\$[./A-Za-z0-9]{53}|PRACTICE_AUTH_(HASH|USER)=[^ ]" 2>/dev/null | grep .'
+check feat-001/AC-14 "no bcrypt hash or practice password in tracked files" bash -c '! git ls-files -z | xargs -0 grep -lE "\\\$2[aby]\\\$[0-9]{2}\\\$[./A-Za-z0-9]{53}|PRACTICE_AUTH_(HASH|USER)=['"'"'\"]?[^ <%'"'"'\"]" 2>/dev/null | grep .'
 
 # ---- feat-001/AC-15 (chg-003): practice backup through the app; verified; restore script
 check feat-001/AC-15 "bash -n practice scripts"     bash -c 'for s in practice-backup practice-restore practice-rollback practice-auth; do bash -n scripts/$s.sh && test -x scripts/$s.sh || exit 1; done'
