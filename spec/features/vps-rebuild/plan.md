@@ -56,6 +56,32 @@ This plan states the remaining HOW and the build order. Source code lives at the
   and the litellm config are copied off the running box with `scp` (read-only; touches nothing) —
   the constitution's ask-first rule covers changes to the box, not reads.
 
+- **D9 — Practice app (chg-003).** One user behind Caddy `basic_auth`, the simplest auth Caddy has and
+  the same single-entry-point pattern as every other site; the user and bcrypt hash arrive as a required
+  caddy `env_file` (`/srv/secrets/practice-auth.env`, hash single-quoted — Compose interpolation mangles an
+  unquoted bcrypt hash whose salt starts with a letter, verified 2026-11-07), so a missing file stops
+  `compose up` before caddy is touched. The app container has no secret at all. It joins only a new
+  `internal: true` network shared with caddy (no host port, no route out; todo/myron cannot reach it), and
+  the app itself admits only the public Host/Origin and never reads forwarded headers. Its SQLite database
+  lives in the `practice-data` named volume (local ext4: the app's Linux locks are POSIX record locks and need
+  a local filesystem). Because the app owns the database exclusively for its whole life, the D6 pattern
+  (`docker exec … sqlite3 .backup`) is impossible by design; `scripts/practice-backup.sh` asks the running
+  app over its 0600 in-container socket for its normal verified backup and re-verifies the copy (AC-15).
+  Scores are private: the practice repo's `deploy/deploy.sh` rsyncs `.mscz` byte-for-byte to
+  `/srv/practice/sources` plus laptop-exported MusicXML sidecars to `/srv/practice/exports`, both bind-mounted
+  read-only with `create_host_path: false`; there is no MuseScore on the box (scans export only unseen
+  content, and the sidecars come from the MuseScore that made every stored revision). Code arrives as a
+  `git archive` of a reviewed commit in `/opt/practice/app`. `TZ: America/New_York` keeps the practice day
+  where it was on the laptop. Limits 768 MB / 1 CPU (2-core, no-swap box). Moving the schedule is a one-time
+  cutover that retires the laptop home (the app refuses a retired home), so two schedules never diverge; the
+  service's first start comes after the import, never at go-live. Rollback (`practice-rollback.sh`) never
+  infers authority from how far the cutover got: an empty server must be proven by every piece of
+  evidence (whole-home `practice inventory` of every file of any name, no `data/`, nothing but lock/note files
+  and the laptop's own final pair, the service never created, no later server snapshot); otherwise it compares verified backups
+  by content — music identity (Exercise mapping, source revisions, event sets) and history — and takes the
+  laptop copy when they are the same, the server's when it extends it, and stops on anything else. Restores go through the app's `import-backup`, which never reuses a different
+  same-named pair.
+
 ## Task breakdown
 
 Ordered; `[P]` tasks are mutually independent once T1 is done. See `tasks.md` for the live
@@ -78,4 +104,8 @@ invocations) and, for AC-10, the public HTTPS endpoints.
 | AC-8 | `git check-ignore backend.hcl terraform/backend.hcl terraform.tfstate x.env sub/dir/x.env`; the pre-commit hook exists and rejects a staged `.env` test file; grep tracked files (litellm/config.yaml included) for the six secret names' values (names may appear, values may not) | feat-001/AC-8 |
 | AC-9 | grep README for the nine runbook steps, the `~/.claude.json` snippet, the two-file-edit note | feat-001/AC-9 |
 | AC-10 | (manual, post-cutover) curl the four hostnames over HTTPS; `ssh` in: `ps axww | grep TODO_TOKEN` empty; `pm2`/`nginx`/`ollama` absent; todo.db restored | feat-001/AC-10 |
+| AC-13 | `docker compose config --format json`: practice service shape (no ports, internal network only, caddy the only other member, practice-data volume, read-only binds without host-path creation, 0700 tmpfs, pinned base, USER node, non-secret env incl. public origin and TZ, limits) | feat-001/AC-13 |
+| AC-14 | `--no-env-resolution` config: caddy's required `practice-auth.env`; the Caddyfile block has basic_auth placeholders, the proxy and `header_up -Authorization`, no Permissions-Policy; no bcrypt hash or credential in tracked files | feat-001/AC-14 |
+| AC-15 | `bash -n` + executable practice scripts; backup goes through `admin.js backup`, never sqlite3/the live file; re-verification and manifest-last publish present; backup.sh calls it; restore refuses a running service. Behaviour: slice 09 rehearsal (`checks-backup.sh`) | feat-001/AC-15 |
+| AC-16 | grep README for the Practice section, auth file, cutover and rollback commands | feat-001/AC-16 |
 | AC-11 | `docker compose config --format json`: `myron-api` mounts the `myron-auth` volume, its `AUTH_DB_PATH` resolves inside that mount, `NODE_ENV` is `production`, and it still declares no `ports:` | feat-001/AC-11 |

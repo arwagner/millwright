@@ -25,6 +25,16 @@ services:
       - /var/www/tiamat:/srv/tiamat:ro
       - caddy-data:/data
       - caddy-config:/config
+    # chg-003: the practice site's basic-auth user and bcrypt hash, for the Caddyfile's
+    # {$PRACTICE_AUTH_USER} / {$PRACTICE_AUTH_HASH}. Required: if the file is missing,
+    # `docker compose up` refuses before touching the running caddy. The hash must be
+    # single-quoted in the file (an unquoted bcrypt hash is mangled by Compose).
+    env_file:
+      - /srv/secrets/practice-auth.env # PRACTICE_AUTH_USER, PRACTICE_AUTH_HASH
+    # default: every existing site; practice: the internal-only network to the practice app.
+    networks:
+      - default
+      - practice
 
   todo:
     # Stable name: backup.sh and the ~/.claude.json MCP snippet `docker exec todo …`
@@ -99,6 +109,76 @@ services:
     volumes:
       - /var/www/exploring-elan/data:/app/data
 
+  # chg-003: piano practice app at practice.vawagners.cloud (single user, Caddy basic auth).
+  # App code lives in the practice repo and arrives as a `git archive` of a reviewed commit
+  # in /opt/practice/app (its deploy/deploy.sh). The server owns its SQLite database for its
+  # whole life; backups go through its maintenance socket (scripts/practice-backup.sh).
+  practice:
+    # Stable name: practice-backup.sh `docker exec practice …`.
+    container_name: practice
+    build:
+      context: /opt/practice/app
+      dockerfile_inline: |
+        FROM node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203
+        ENV NODE_ENV=production
+        WORKDIR /app
+        COPY package.json package-lock.json ./
+        RUN npm ci --omit=dev --no-audit --no-fund
+        COPY src ./src
+        COPY public ./public
+        COPY config ./config
+        # A new named volume copies this folder's ownership, so the app can write its home.
+        RUN mkdir -p /var/lib/practice && chown node:node /var/lib/practice
+        USER node
+        CMD ["node", "src/server.js"]
+    restart: unless-stopped
+    init: true
+    environment:
+      # None of these is a secret; authentication is Caddy's (caddy/Caddyfile).
+      # The practice day (04:00 start), Session days and due dates follow the process's
+      # time zone, as they did on the laptop; the box itself runs in UTC.
+      TZ: America/New_York
+      PRACTICE_HOME: /var/lib/practice
+      PRACTICE_BIND: 0.0.0.0
+      PRACTICE_PORT: "8770"
+      # The only Host/Origin the app admits (it never reads forwarded headers).
+      PRACTICE_PUBLIC_ORIGIN: https://practice.vawagners.cloud
+      PRACTICE_ADMIN_SOCKET: /run/practice/admin.sock
+      # collections.json roots are "../<Collection>": they resolve to /srv/exercises/<Collection>.
+      PRACTICE_COLLECTIONS_BASE: /srv/exercises/practice
+      # No MuseScore on the box: scans use MusicXML exported on the laptop (sidecars).
+      PRACTICE_EXPORTER: sidecar
+      PRACTICE_SIDECAR_DIR: /srv/practice-exports
+    volumes:
+      # Live database, pointer, restored copies and the app's own snapshots. Local volume
+      # only: the app's POSIX locks need a local Linux filesystem.
+      - practice-data:/var/lib/practice
+      # Private notation, rsync'd byte-for-byte by the practice repo's deploy.sh. Never in
+      # this repo or an image. create_host_path: false — a missing folder fails the start
+      # instead of scanning an empty one.
+      - type: bind
+        source: /srv/practice/sources
+        target: /srv/exercises
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /srv/practice/exports
+        target: /srv/practice-exports
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      # Maintenance socket folder: in-container only, owned by the app's user, mode 700.
+      - /run/practice:uid=1000,gid=1000,mode=0700
+    networks:
+      - practice
+    expose:
+      - "8770"
+    # Box: 2 cores, 7.8 GB, no swap. The app is small; keep it from crowding the others.
+    mem_limit: 768m
+    cpus: 1.0
+
   # litellm — retired to cold storage (decision 10). Config kept in litellm/.
   # Uncomment to resurrect; master key comes from /srv/secrets/litellm.env.
   # litellm:
@@ -111,6 +191,11 @@ services:
   #     - ./litellm/config.yaml:/app/config.yaml:ro
   #   expose:
   #     - "4000"
+
+networks:
+  # chg-003: internal — no route out, no host port; only caddy and practice are attached.
+  practice:
+    internal: true
 
 volumes:
   todo-data:
@@ -128,3 +213,6 @@ volumes:
       type: none
       o: bind
       device: /var/www/exploring-elan/client/dist
+  # chg-003: the practice app's home (live SQLite database, pointer, its own verified
+  # snapshots). Backed up nightly through the app (scripts/practice-backup.sh).
+  practice-data:

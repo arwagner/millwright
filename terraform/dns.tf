@@ -56,3 +56,12 @@ resource "hostinger_dns_record" "tiamat" {
   value = local.ip
   ttl   = 300
 }
+
+resource "hostinger_dns_record" "practice" {
+  # chg-003: the piano practice app (Caddy basic auth in front of the practice container).
+  zone  = local.zone
+  name  = "practice"
+  type  = "A"
+  value = local.ip
+  ttl   = 300
+}
