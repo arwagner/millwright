@@ -54,3 +54,23 @@ tiamat.vawagners.cloud {
 	try_files {path} {path}.html
 	file_server
 }
+
+# chg-003: piano practice app — one user, behind basic auth. The user and bcrypt hash come
+# from /srv/secrets/practice-auth.env (caddy's env_file), never this file. Everything on the
+# host is authenticated: page, scripts, the Verovio renderer, every /api/ call and export.
+# The app admits only this Host and Origin (PRACTICE_PUBLIC_ORIGIN) and never reads forwarded
+# headers; Caddy passes the browser's Host through unchanged. No Permissions-Policy is set:
+# the browser's default (same-origin) keeps the MIDI permission prompt available.
+practice.vawagners.cloud {
+	basic_auth {
+		{$PRACTICE_AUTH_USER} {$PRACTICE_AUTH_HASH}
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	reverse_proxy practice:8770 {
+		# The app has no use for the credentials; keep them out of its process.
+		header_up -Authorization
+	}
+}

@@ -67,3 +67,33 @@ Glyphs: `[x]` done · `[ ]` not started · `[~]` in progress · `[-]` n/a · `[H
   are not restored by a rebuild — recreate them with
   `docker compose exec myron-api npm run users -- add <name>`. Fold into the existing runbook step 7
   rather than adding a step: AC-9 asserts the runbook has nine. (AC-9, AC-11)
+
+- [x] T15: (chg-003) `compose.yaml`: practice service, caddy `env_file` + `networks`, `practice` internal
+  network, `practice-data` volume; `caddy/Caddyfile` practice block; `terraform/dns.tf` practice record
+  (fmt + validate offline). (AC-2, AC-4, AC-5, AC-13, AC-14)
+- [x] T16: (chg-003) `scripts/practice-backup.sh`, `scripts/practice-restore.sh`, `scripts/practice-auth.sh`;
+  `scripts/backup.sh` runs the practice step last. Rehearsed against an isolated local Compose target with an
+  injected transport (never the box): running and stopped backups, corrupt transfer and server-down refusals,
+  blank-volume restore. (AC-7, AC-15)
+- [x] T17: (chg-003) `scripts/verify.sh` checks for AC-13 to AC-16 and the new AC-2/4/5/8 shapes; README
+  hostname row, runbook steps 1/5/6/7/9, nightly-backup note, secrets row, Practice section. (AC-8, AC-9, AC-16)
+- [ ] T18: (chg-003) Mainline product-global patch (DNS record set, hostname map, practice backup line) —
+  reviewed and merged on main before go-live; not part of this branch.
+- [H] T19: (chg-003, hs-3) Go-live, after Andrew's approval: push millwright; `terraform apply -target=hostinger_dns_record.practice`;
+  `practice-auth.env` to Dropbox + `/srv/secrets`; box folders; practice `deploy/deploy.sh --rev <reviewed> --no-start`;
+  pre-flight caddy validate with the real env; `docker compose up -d caddy` ONLY — practice is not started
+  until T20 imports the schedule (no empty server database); checks (401, then 502 with credentials).
+- [H] T20: (chg-003, hs-4) Schedule cutover, after Andrew's approval: laptop `retire`, `practice-restore.sh`
+  of the final backup, first server scan (exported 0, no changes), `docker compose up -d practice` (its first
+  start), sign in from each computer, first nightly backup verified, real keyboard check. Any failure or
+  later rollback: `practice-rollback.sh` (authority from the data). AC-10 at the next real rebuild includes practice.
+- [x] T23: (chg-003 r4 repair) `practice inventory` walks the whole home (any database name, SQLite by
+  header; symlinks/special/unreadable reported); rollback declares a server empty only with no `data/`, no
+  other file, the service never created and no later server snapshot; otherwise STOP. (AC-15)
+- [x] T22: (chg-003 r3 repairs) rollback stops on a missing/unreadable server pointer beside any database or
+  backup (empty proven by `practice inventory`); `compare-history` compares verified backups by content,
+  including music identity, so equal revision ids with different music are divergence. (AC-15)
+- [x] T21: (chg-003 r2 repairs) restore through the app's `import-backup` (no silent reuse of a different
+  same-named pair), fresh staging; `practice-rollback.sh` with data-decided authority and a pre-change record;
+  practice-side guarded reads on Linux, quoted remote delivery, fresh per-attempt release staging. (AC-15)
+
