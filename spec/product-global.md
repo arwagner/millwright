@@ -22,20 +22,26 @@ nightly backup.
   restores every service on the same IP; downtime during a scheduled rebuild is acceptable.
 - Privacy / data handling: `todo.db` is backed up nightly via an atomic SQLite `.backup` inside the
   container (never a raw copy of a live WAL database), landing in Dropbox with the Caddy
-  certificate volume.
+  certificate volume. The practice app's database (chg-003) is owned exclusively by its running
+  server, so it is backed up nightly by that server's own verified backup, requested over its
+  in-container socket, copied home and verified again before it lands in Dropbox (never `sqlite3`,
+  never a copy of the live file). Practice scores and their MusicXML are private: delivered to the
+  box over SSH, never in this repository or an image.
 
 ## Product invariants
 - The IP address 187.124.159.132 does not change across rebuilds.
 - Terraform owns every DNS record for vawagners.cloud; nothing else creates or edits them. The
   record set (reconciled against the Hostinger panel 2026-08-17): A records at the apex, todo,
-  exploring-elan, fiddlesticks, and tiamat (chg-002), plus www (currently a CNAME to the apex). The panel's two
+  exploring-elan, fiddlesticks, tiamat (chg-002), and practice (chg-003), plus www (currently a
+  CNAME to the apex). The panel's two
   extra records, n8n and llm, point at the box with nothing behind them — Andrew approved dropping
   both at the DNS adoption, so they are deleted and not recreated.
 - Docker Compose is the only process manager on the box — no systemd app units, no PM2.
 - Each hostname serves exactly its assigned target: vawagners.cloud (static), todo.vawagners.cloud
   (proxy to todo:8787), exploring-elan.vawagners.cloud (static client + /api/* to myron-api:3001),
   fiddlesticks.vawagners.cloud (static), tiamat.vawagners.cloud (static, from the host path
-  `/var/www/tiamat`, delivered by the Tiamat wiki's `deploy.sh`).
+  `/var/www/tiamat`, delivered by the Tiamat wiki's `deploy.sh`), practice.vawagners.cloud (Caddy
+  basic auth, then proxy to practice:8770 on an internal-only network; chg-003).
 - A blank box can clone millwright without any credential.
 
 ## Cross-cutting constraints
