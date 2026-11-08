@@ -44,7 +44,7 @@ check feat-001/AC-4 "compose config valid"          test -n "$CJSON"
 check feat-001/AC-4 "services + restart + ports only on caddy" bash -c "echo \"\$1\" | python3 -c '
 import json,sys
 s=json.load(sys.stdin)[\"services\"]
-assert set(s) == {\"caddy\",\"todo\",\"myron-api\",\"myron-bot\",\"practice\"}, set(s)
+assert set(s) == {\"caddy\",\"todo\",\"myron-api\",\"myron-bot\",\"practice\",\"practice-convert\"}, set(s)
 assert all(v.get(\"restart\")==\"unless-stopped\" for v in s.values())
 assert [k for k,v in s.items() if v.get(\"ports\")] == [\"caddy\"]
 '" _ "$CJSON"
@@ -101,7 +101,7 @@ assert e[\"PRACTICE_EXPORTER\"]==\"sidecar\" and e[\"TZ\"]==\"America/New_York\"
 assert not any(\"AUTH\" in k or \"PASS\" in k or \"TOKEN\" in k for k in e), sorted(e)
 assert not p.get(\"env_file\"), \"practice needs no secret\"
 vols=p[\"volumes\"]
-data=[v for v in vols if v[\"type\"]==\"volume\"]
+data=[v for v in vols if v[\"type\"]==\"volume\" and not v[\"source\"].startswith(\"practice-convert-\")]
 assert len(data)==1 and data[0][\"source\"]==\"practice-data\" and data[0][\"target\"]==e[\"PRACTICE_HOME\"]
 binds={v[\"source\"]:v for v in vols if v[\"type\"]==\"bind\"}
 assert set(binds)=={\"/srv/practice/sources\",\"/srv/practice/exports\"}, set(binds)
@@ -116,6 +116,32 @@ check feat-001/AC-13 "practice-data declared as a volume" bash -c "echo \"\$1\" 
 import json,sys
 assert \"practice-data\" in json.load(sys.stdin).get(\"volumes\",{})
 '" _ "$CJSON"
+
+# ---- feat-001/AC-18 (chg-005): practice-convert boxed in; shares only the spool with practice
+check feat-001/AC-18 "practice-convert isolation" bash -c "echo \"\$1\" | python3 -c '
+import json,sys
+c=json.load(sys.stdin); v=c[\"services\"][\"practice-convert\"]
+assert v.get(\"container_name\")==\"practice-convert\" and v.get(\"restart\")==\"unless-stopped\"
+assert v[\"build\"][\"context\"]==\"/opt/practice/app/convert\"
+assert v.get(\"network_mode\")==\"none\" and not v.get(\"networks\") and not v.get(\"ports\") and not v.get(\"expose\")
+assert v.get(\"read_only\") is True and v.get(\"cap_drop\")==[\"ALL\"] and \"no-new-privileges:true\" in v.get(\"security_opt\",[])
+assert int(v[\"mem_limit\"])==1536*2**20 and int(v[\"memswap_limit\"])==int(v[\"mem_limit\"]) and float(v[\"cpus\"])==1.0 and v.get(\"pids_limit\")==64
+assert not v.get(\"env_file\") and not v.get(\"environment\")
+vols={x[\"target\"]:x for x in v[\"volumes\"]}
+assert set(vols)=={\"/spool/in\",\"/spool/out\"}, set(vols)
+assert vols[\"/spool/in\"][\"type\"]==\"volume\" and vols[\"/spool/in\"][\"source\"]==\"practice-convert-in\" and vols[\"/spool/in\"].get(\"read_only\") is True
+assert vols[\"/spool/out\"][\"type\"]==\"volume\" and vols[\"/spool/out\"][\"source\"]==\"practice-convert-out\" and not vols[\"/spool/out\"].get(\"read_only\")
+assert any(t.startswith(\"/tmp:\") for t in v.get(\"tmpfs\",[]))
+for k,s in c[\"services\"].items():
+    if k not in (\"practice\",\"practice-convert\"):
+        assert not any(str(x.get(\"source\",\"\")).startswith(\"practice-convert-\") for x in s.get(\"volumes\",[]) if isinstance(x,dict)), k
+p=c[\"services\"][\"practice\"]; e=p[\"environment\"]
+pv={x[\"source\"]:x for x in p[\"volumes\"] if x[\"type\"]==\"volume\"}
+assert pv[\"practice-convert-in\"][\"target\"]==e[\"PRACTICE_CONVERT_IN\"] and pv[\"practice-convert-out\"][\"target\"]==e[\"PRACTICE_CONVERT_OUT\"]
+assert \"chmod 0777 /spool/convert/in /spool/convert/out\" in p[\"build\"][\"dockerfile_inline\"]
+assert {\"practice-convert-in\",\"practice-convert-out\"} <= set(c[\"volumes\"])
+'" _ "$CJSON"
+check feat-001/AC-18 "README: converter section" bash -c 'grep -q "^### Converter (chg-005)" README.md && grep -q "practice-convert" README.md'
 
 # ---- feat-001/AC-14 (chg-003): practice site behind basic auth; credentials only from /srv/secrets
 check feat-001/AC-14 "caddy reads practice-auth.env (required)" bash -c "echo \"\$1\" | python3 -c '
