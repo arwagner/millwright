@@ -14,7 +14,7 @@ no credentials. Secrets live in Dropbox, never here.
 | exploring-elan.vawagners.cloud | static client `dist`, `/api/*` to myron-api:3001 |
 | fiddlesticks.vawagners.cloud | static, `sites/fiddlesticks` |
 | tiamat.vawagners.cloud | static, `/var/www/tiamat` (rsync'd by the Tiamat wiki's `deploy.sh`) |
-| practice.vawagners.cloud | basic auth, then proxy to practice:8770 (piano practice app; see [Practice](#practice)) |
+| practice.vawagners.cloud | basic auth or the sign-in cookie, then proxy to practice:8770 (piano practice app; see [Practice](#practice)) |
 
 ## Layout
 
@@ -23,6 +23,7 @@ terraform/        DNS records, SSH key, post-install script (NEVER the VPS subsc
 bootstrap.sh      blank box -> Compose host (docker, ufw, sshd hardening, clone)
 compose.yaml      caddy, todo, myron-api, myron-bot, practice; litellm commented out
 caddy/Caddyfile   TLS (ACME), static sites, reverse proxies
+caddy/practice-signin/  the practice sign-in page (chg-004), mounted into caddy
 sites/            vawagners + fiddlesticks static content (tiamat lives in its own repo)
 litellm/          cold storage; every key comes from env
 scripts/          rebuild.sh, backup.sh, verify.sh, launchd plist; practice-{backup,restore,auth}.sh
@@ -53,7 +54,7 @@ spec/             spec-flow workspace (specs, plans, gates)
    Practice: `scripts/practice-restore.sh <newest backup/practice/practice-….sqlite>` (laptop; the
    practice service is not running yet), which verifies the pair, imports it and restores it.
 8. `cd /srv/millwright && docker compose up -d --build`.
-9. Check each hostname over HTTPS (practice: 401 without credentials, the app with them); on the box,
+9. Check each hostname over HTTPS (practice: 401 without credentials, whose body links `/signin`; `/signin` 200; the app with them); on the box,
    `ps axww | grep TODO_TOKEN` must find nothing and `pm2`/`nginx`/`ollama` must not exist.
 
 ## Nightly backup
@@ -105,7 +106,7 @@ Names, for the grep in `scripts/verify.sh`:
 | myron-api.env | (empty today — confirm at cutover) | myron api |
 | litellm.env | `LITELLM_MASTER_KEY` | litellm, if ever resurrected (rotate: the old key is burned) |
 | hostinger-api-token | `HOSTINGER_API_TOKEN` | rebuild.sh |
-| practice-auth.env | `PRACTICE_AUTH_USER`, `PRACTICE_AUTH_HASH` (bcrypt, single-quoted) | caddy, for practice.vawagners.cloud |
+| practice-auth.env | `PRACTICE_AUTH_USER`, `PRACTICE_AUTH_HASH` (bcrypt, single-quoted), `PRACTICE_SESSION_SECRET` (64 hex, the sign-in cookie) | caddy, for practice.vawagners.cloud |
 
 ## Known risks
 
@@ -124,11 +125,11 @@ Names, for the grep in `scripts/verify.sh`:
 The piano practice app (code in the practice repo; its `docs/DEPLOY.md` is the app-side contract).
 One user, one server-owned SQLite schedule used from every computer.
 
-- **Auth**: Caddy `basic_auth` on every path; the user and bcrypt hash come from
-  `/srv/secrets/practice-auth.env`. Make that file with `scripts/practice-auth.sh <user>` (asks for the
-  password, hashes it with Caddy on stdin, writes it single-quoted — Compose mangles an unquoted bcrypt
-  hash). The app also admits only `Host: practice.vawagners.cloud` and that Origin, and ignores forwarded
-  headers.
+- **Auth**: Caddy `basic_auth` on every path except the sign-in page, or the sign-in cookie (below); the
+  user, bcrypt hash and session secret come from `/srv/secrets/practice-auth.env`. Make that file with
+  `scripts/practice-auth.sh <user>` (asks for the password, hashes it with Caddy on stdin, writes it
+  single-quoted — Compose mangles an unquoted bcrypt hash — and adds a random session secret). The app also
+  admits only `Host: practice.vawagners.cloud` and that Origin, and ignores forwarded headers.
 - **Network**: `practice` sits only on the internal `practice` network (with caddy); no host port, no route
   out. Its data is the `practice-data` named volume.
 - **Scores**: private. `deploy/deploy.sh` in the practice repo rsyncs the `.mscz` files byte-for-byte to
@@ -137,6 +138,42 @@ One user, one server-owned SQLite schedule used from every computer.
 - **One-off commands** (`docker compose run --rm --no-deps practice node src/cli.js …`) only while the
   service is stopped; while it runs they are refused (`DB_IN_USE`).
 - **Day boundaries** follow `TZ: America/New_York` in compose.yaml (the box runs UTC).
+
+### Sign-in page (chg-004)
+
+Some web views never show the browser's Basic prompt: the iPad "Web MIDI" apps render the empty 401 as a
+blank page. So the practice site also has a sign-in page. Safari and Chrome still prompt and work as before.
+
+- `GET /signin` is the only public path: a form (`caddy/practice-signin/signin.html`, mounted read-only).
+- The form sends the typed user and password as the `Authorization` header of one `POST /signin/check`.
+  Caddy's `basic_auth` checks them exactly as the prompt would; only then does Caddy set
+  `practice_session=<PRACTICE_SESSION_SECRET>; Secure; HttpOnly; SameSite=Lax`, for a year. The `route` around
+  that handler must stay: Caddy's default order would set the cookie before checking the password.
+- A request whose cookie equals the secret goes to the app; so does one that passes basic auth. The app sees
+  neither the cookie nor the `Authorization` header. Anything else gets 401 with `WWW-Authenticate` (browsers
+  prompt) and a body that sends a web view to `/signin`.
+- If the secret is missing or not 64 hex, the cookie admits nobody (basic auth still works).
+- One secret for every device, so there is no per-device sign-out.
+  **Rotating the secret signs out every device** (they get the sign-in page or the prompt again).
+
+Apply (once; then a normal Millwright deploy):
+1. Laptop: `scripts/practice-auth.sh --session-secret` adds the secret to
+   `~/Dropbox/andrew/secrets/millwright/practice-auth.env`, keeping the user and hash lines.
+2. Copy that file to `/srv/secrets/practice-auth.env` on the box, `chmod 600` (as runbook step 6).
+3. Push, then on the box `cd /srv/millwright && git pull --ff-only && docker compose up -d caddy`. caddy is
+   recreated (new env value and mount): every site pauses for a few seconds. Do it while no practice Session
+   is open.
+4. Check: no credentials → 401 whose body links `/signin`; `/signin` → 200; a wrong password on
+   `/signin/check` → 401 and no `Set-Cookie`; a made-up cookie → 401; the other sites unchanged. Then sign in
+   in a browser and in the iPad app.
+
+Rollback: on the box `cd /srv/millwright && git checkout <previous commit> && docker compose up -d caddy`
+(basic auth only, as before; the iPad app is blank again), then revert the merge on main, push, and
+`git checkout main && git pull --ff-only` on the box. The extra line in `practice-auth.env` is harmless to
+the old Caddyfile.
+
+Rotate (sign every device out): `scripts/practice-auth.sh --rotate-session-secret`, copy the file to the
+box as in step 2, then `docker compose up -d caddy`.
 
 ### Moving the schedule from the laptop (cutover)
 

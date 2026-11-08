@@ -23,14 +23,17 @@ services:
       - myron-client-dist:/srv/exploring-elan:ro
       # chg-002: Tiamat wiki, rsync'd from the laptop (wiki repo deploy.sh)
       - /var/www/tiamat:/srv/tiamat:ro
+      # chg-004: the practice sign-in page (GET /signin), for web views that can't show the Basic prompt.
+      - ./caddy/practice-signin:/srv/practice-signin:ro
       - caddy-data:/data
       - caddy-config:/config
     # chg-003: the practice site's basic-auth user and bcrypt hash, for the Caddyfile's
     # {$PRACTICE_AUTH_USER} / {$PRACTICE_AUTH_HASH}. Required: if the file is missing,
     # `docker compose up` refuses before touching the running caddy. The hash must be
     # single-quoted in the file (an unquoted bcrypt hash is mangled by Compose).
+    # chg-004: the same file holds PRACTICE_SESSION_SECRET (64 hex), the sign-in cookie's value.
     env_file:
-      - /srv/secrets/practice-auth.env # PRACTICE_AUTH_USER, PRACTICE_AUTH_HASH
+      - /srv/secrets/practice-auth.env # PRACTICE_AUTH_USER, PRACTICE_AUTH_HASH, PRACTICE_SESSION_SECRET
     # default: every existing site; practice: the internal-only network to the practice app.
     networks:
       - default

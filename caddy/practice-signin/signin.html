@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Practice · Sign in</title>
+<style>
+  body { font: 17px/1.4 system-ui, sans-serif; max-width: 22rem; margin: 15vh auto; padding: 0 16px; background: #faf8f4; color: #222; }
+  label { display: block; margin: .8rem 0 .2rem; }
+  input, button { font: inherit; width: 100%; box-sizing: border-box; padding: .6rem; }
+  button { margin-top: 1.2rem; }
+  #msg { color: #a33; min-height: 1.4em; }
+</style>
+</head>
+<body>
+<h1>Practice</h1>
+<form id="f">
+  <label for="u">User</label><input id="u" autocomplete="username" autocapitalize="none" required>
+  <label for="p">Password</label><input id="p" type="password" autocomplete="current-password" required>
+  <button>Sign in</button>
+  <p id="msg" role="alert"></p>
+</form>
+<script>
+// The password goes only in this request's Authorization header (same check as the browser prompt);
+// on success the server sets an HttpOnly session cookie and the app opens.
+document.getElementById('f').onsubmit = async e => {
+  e.preventDefault();
+  const msg = document.getElementById('msg'); msg.textContent = '';
+  const cred = btoa(unescape(encodeURIComponent(`${u.value}:${p.value}`)));
+  try {
+    const r = await fetch('/signin/check', { method: 'POST', headers: { Authorization: `Basic ${cred}` }, credentials: 'same-origin', cache: 'no-store' });
+    if (r.ok) { location.replace('/'); return; }
+    msg.textContent = r.status === 401 ? 'User or password is wrong.' : `Sign-in failed (${r.status}).`;
+  } catch (err) { msg.textContent = `Sign-in failed: ${err.message}`; }
+};
+</script>
+</body>
+</html>

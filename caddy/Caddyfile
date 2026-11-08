@@ -55,22 +55,79 @@ tiamat.vawagners.cloud {
 	file_server
 }
 
-# chg-003: piano practice app — one user, behind basic auth. The user and bcrypt hash come
-# from /srv/secrets/practice-auth.env (caddy's env_file), never this file. Everything on the
+# chg-003: piano practice app — one user. The user and bcrypt hash come from
+# /srv/secrets/practice-auth.env (caddy's env_file), never this file. Everything on the
 # host is authenticated: page, scripts, the Verovio renderer, every /api/ call and export.
 # The app admits only this Host and Origin (PRACTICE_PUBLIC_ORIGIN) and never reads forwarded
 # headers; Caddy passes the browser's Host through unchanged. No Permissions-Policy is set:
 # the browser's default (same-origin) keeps the MIDI permission prompt available.
+#
+# chg-004: a sign-in page and cookie beside basic auth, for web views that never show the
+# Basic prompt (the iPad "Web MIDI" apps: a blank 401). Same user and password, still checked
+# by basic_auth's bcrypt; Safari and Chrome still prompt and work as before.
+#   GET  /signin        public: the form (caddy/practice-signin/signin.html).
+#   POST /signin/check  the form sends the typed credentials as this request's Authorization;
+#                       basic_auth checks them, and only then is the session cookie set.
+#   a request whose cookie is exactly practice_session=<PRACTICE_SESSION_SECRET> → the app;
+#   a request with an Authorization header → basic_auth, as before; anything else → 401 with
+#   WWW-Authenticate (browsers prompt) and a body that leads a web view to /signin.
+# PRACTICE_SESSION_SECRET (64 hex, same env file, scripts/practice-auth.sh) is the cookie for
+# every signed-in device: rotating it signs every device out. The app never sees the cookie or
+# the Authorization header.
 practice.vawagners.cloud {
-	basic_auth {
-		{$PRACTICE_AUTH_USER} {$PRACTICE_AUTH_HASH}
-	}
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		-Server
 	}
-	reverse_proxy practice:8770 {
-		# The app has no use for the credentials; keep them out of its process.
-		header_up -Authorization
+	# The cookie must equal the secret exactly (anchored). The expression refuses a missing or
+	# malformed secret: without it, an unset PRACTICE_SESSION_SECRET would admit the cookie
+	# "practice_session=" with no password.
+	@session {
+		header_regexp Cookie (^|;\s*)practice_session={$PRACTICE_SESSION_SECRET}(;|$)
+		expression `"{$PRACTICE_SESSION_SECRET}".matches("^[0-9a-f]{64}$")`
+	}
+	@hasauth header Authorization *
+
+	handle /signin {
+		header Cache-Control no-store
+		root * /srv/practice-signin
+		rewrite * /signin.html
+		file_server
+	}
+	# Keep the `route`: it runs its directives in the written order. Caddy's default order runs
+	# `header` BEFORE `basic_auth`, which would hand the cookie to a wrong password.
+	handle /signin/check {
+		route {
+			basic_auth {
+				{$PRACTICE_AUTH_USER} {$PRACTICE_AUTH_HASH}
+			}
+			header Set-Cookie "practice_session={$PRACTICE_SESSION_SECRET}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=31536000"
+			header Cache-Control no-store
+			respond 204
+		}
+	}
+	handle @session {
+		reverse_proxy practice:8770 {
+			# The app has no use for the credentials; keep them out of its process.
+			header_up -Authorization
+			header_up -Cookie
+		}
+	}
+	handle @hasauth {
+		basic_auth {
+			{$PRACTICE_AUTH_USER} {$PRACTICE_AUTH_HASH}
+		}
+		reverse_proxy practice:8770 {
+			header_up -Authorization
+			header_up -Cookie
+		}
+	}
+	# No credentials: browsers that prompt (Chrome, Safari) still prompt; a web view that can't
+	# shows this body instead of a blank page.
+	handle {
+		header WWW-Authenticate "Basic realm=\"restricted\""
+		header Content-Type "text/html; charset=utf-8"
+		header Cache-Control no-store
+		respond `<!doctype html><meta name="viewport" content="width=device-width"><meta http-equiv="refresh" content="0;url=/signin"><p><a href="/signin">Sign in</a></p>` 401
 	}
 }
