@@ -124,8 +124,25 @@ ef=json.load(sys.stdin)[\"services\"][\"caddy\"][\"env_file\"]
 m=[f for f in ef if f[\"path\"]==\"/srv/secrets/practice-auth.env\"]
 assert len(m)==1 and m[0].get(\"required\",True) is not False, ef
 '" _ "$CJSON_REFS"
-check feat-001/AC-14 "practice block: basic_auth placeholders, proxy, no Authorization upstream" bash -c 'b=$(sed -n "/^practice.vawagners.cloud {/,/^}/p" caddy/Caddyfile); grep -q "basic_auth {" <<<"$b" && grep -q "{\$PRACTICE_AUTH_USER} {\$PRACTICE_AUTH_HASH}" <<<"$b" && grep -q "reverse_proxy practice:8770" <<<"$b" && grep -q "header_up -Authorization" <<<"$b" && ! grep -qi "permissions-policy" <<<"$b"'
+check feat-001/AC-14 "practice block: basic_auth placeholders, proxy, no Authorization upstream (chg-004: two basic_auth, two proxies)" bash -c 'b=$(sed -n "/^practice.vawagners.cloud {/,/^}/p" caddy/Caddyfile); grep -q "basic_auth {" <<<"$b" && grep -q "{\$PRACTICE_AUTH_USER} {\$PRACTICE_AUTH_HASH}" <<<"$b" && grep -q "reverse_proxy practice:8770" <<<"$b" && grep -q "header_up -Authorization" <<<"$b" && ! grep -qi "permissions-policy" <<<"$b"'
 check feat-001/AC-14 "no bcrypt hash or practice password in tracked files" bash -c '! git ls-files -z | xargs -0 grep -lE "\\\$2[aby]\\\$[0-9]{2}\\\$[./A-Za-z0-9]{53}|PRACTICE_AUTH_(HASH|USER)=['"'"'\"]?[^ <%'"'"'\"]" 2>/dev/null | grep .'
+
+# ---- feat-001/AC-17 (chg-004): practice sign-in page + cookie beside basic auth; secret only from /srv/secrets
+PB='b=$(sed -n "/^practice.vawagners.cloud {/,/^}/p" caddy/Caddyfile)'
+check feat-001/AC-17 "sign-in page tracked and mounted read-only into caddy" bash -c "test -f caddy/practice-signin/signin.html && echo \"\$1\" | python3 -c '
+import json,sys
+v=json.load(sys.stdin)[\"services\"][\"caddy\"][\"volumes\"]
+m=[x for x in v if x.get(\"target\")==\"/srv/practice-signin\"]
+assert len(m)==1 and m[0][\"source\"].endswith(\"/caddy/practice-signin\") and m[0].get(\"read_only\") is True, m
+'" _ "$CJSON"
+check feat-001/AC-17 "only /signin is public; it serves signin.html from the mount" bash -c "$PB"'; grep -q "handle /signin {" <<<"$b" && grep -A4 "handle /signin {" <<<"$b" | grep -q "root \* /srv/practice-signin" && grep -A4 "handle /signin {" <<<"$b" | grep -q "rewrite \* /signin.html" && [ "$(grep -c "^	handle" <<<"$b")" = 5 ]'
+check feat-001/AC-17 "/signin/check: route keeps basic_auth before Set-Cookie" bash -c "$PB"'; c=$(sed -n "/handle \/signin\/check {/,/^	}/p" <<<"$b"); grep -q "route {" <<<"$c" && [ "$(grep -n basic_auth <<<"$c" | cut -d: -f1)" -lt "$(grep -n "Set-Cookie" <<<"$c" | cut -d: -f1)" ] && grep -q "practice_session={\$PRACTICE_SESSION_SECRET}; Path=/; Secure; HttpOnly; SameSite=Lax" <<<"$c"'
+check feat-001/AC-17 "cookie matcher anchored to the secret, refused when the secret is missing" bash -c "$PB"'; grep -qF "header_regexp Cookie (^|;\s*)practice_session={\$PRACTICE_SESSION_SECRET}(;|\$)" <<<"$b" && grep -qF "expression \`\"{\$PRACTICE_SESSION_SECRET}\".matches(\"^[0-9a-f]{64}\$\")\`" <<<"$b"'
+check feat-001/AC-17 "neither cookie nor Authorization reaches the app" bash -c "$PB"'; [ "$(grep -c "reverse_proxy practice:8770" <<<"$b")" = 2 ] && [ "$(grep -c "header_up -Cookie" <<<"$b")" = 2 ] && [ "$(grep -c "header_up -Authorization" <<<"$b")" = 2 ]'
+check feat-001/AC-17 "no credentials: 401 keeps WWW-Authenticate, body leads to /signin" bash -c "$PB"'; grep -qF "header WWW-Authenticate \"Basic realm=\\\"restricted\\\"\"" <<<"$b" && grep -q "url=/signin" <<<"$b" && grep -qE "</p>\` 401$" <<<"$b"'
+check feat-001/AC-17 "practice-auth.sh makes and rotates a 64-hex secret, never printed" bash -c 'grep -q "openssl rand -hex 32" scripts/practice-auth.sh && grep -q -- "--session-secret" scripts/practice-auth.sh && grep -q -- "--rotate-session-secret" scripts/practice-auth.sh && ! grep -E "echo[^#]*\\\$SECRET|printf[^>]*\\\$SECRET[^>]*$" scripts/practice-auth.sh | grep .'
+check feat-001/AC-17 "no session secret value in tracked files" bash -c '! git ls-files -z | xargs -0 grep -lE "PRACTICE_SESSION_SECRET=['"'"'\"]?[0-9a-fA-F]{8}" 2>/dev/null | grep .'
+check feat-001/AC-17 "README: sign-in apply, rollback, rotation" bash -c 'grep -q "^### Sign-in page" README.md && grep -q -- "--rotate-session-secret" README.md && grep -q "signs out every device" README.md && grep -q "PRACTICE_SESSION_SECRET" README.md'
 
 # ---- feat-001/AC-15 (chg-003): practice backup through the app; verified; restore script
 check feat-001/AC-15 "bash -n practice scripts"     bash -c 'for s in practice-backup practice-restore practice-rollback practice-auth; do bash -n scripts/$s.sh && test -x scripts/$s.sh || exit 1; done'
