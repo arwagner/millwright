@@ -21,7 +21,7 @@ no credentials. Secrets live in Dropbox, never here.
 ```
 terraform/        DNS records, SSH key, post-install script (NEVER the VPS subscription)
 bootstrap.sh      blank box -> Compose host (docker, ufw, sshd hardening, clone)
-compose.yaml      caddy, todo, myron-api, myron-bot, practice; litellm commented out
+compose.yaml      caddy, todo, myron-api, myron-bot, practice, practice-convert; litellm commented out
 caddy/Caddyfile   TLS (ACME), static sites, reverse proxies
 caddy/practice-signin/  the practice sign-in page (chg-004), mounted into caddy
 sites/            vawagners + fiddlesticks static content (tiamat lives in its own repo)
@@ -53,7 +53,8 @@ spec/             spec-flow workspace (specs, plans, gates)
    recreate accounts by hand: `docker compose exec myron-api npm run users -- add <name>`.
    Practice: `scripts/practice-restore.sh <newest backup/practice/practice-….sqlite>` (laptop; the
    practice service is not running yet), which verifies the pair, imports it and restores it.
-8. `cd /srv/millwright && docker compose up -d --build`.
+8. `cd /srv/millwright && docker compose up -d --build` (this also builds practice-convert, which downloads
+   the pinned MuseScore AppImage from GitHub).
 9. Check each hostname over HTTPS (practice: 401 without credentials, whose body links `/signin`; `/signin` 200; the app with them); on the box,
    `ps axww | grep TODO_TOKEN` must find nothing and `pm2`/`nginx`/`ollama` must not exist.
 
@@ -138,6 +139,24 @@ One user, one server-owned SQLite schedule used from every computer.
 - **One-off commands** (`docker compose run --rm --no-deps practice node src/cli.js …`) only while the
   service is stopped; while it runs they are refused (`DB_IN_USE`).
 - **Day boundaries** follow `TZ: America/New_York` in compose.yaml (the box runs UTC).
+
+### Converter (chg-005)
+
+`practice-convert` turns `.mscz` files uploaded to the practice app into MusicXML with MuseScore Studio 4.6.5
+(the app never runs MuseScore itself). Its image is built from `convert/` in the practice repo, which
+`deploy/deploy.sh` delivers with the app to `/opt/practice/app/convert`; the build downloads the official
+AppImage and refuses any bytes but the pinned sha256, so a build needs GitHub reachable.
+
+- **Boxed in**: `network_mode: none`, read-only root, uid 10001, no capabilities, `no-new-privileges`,
+  1.5 GB with no swap, 1 CPU, 64 processes, 120 s per batch. No database, practice home, scores or secrets.
+- **Spool**: two named volumes. The app writes jobs to `practice-convert-in` (read-only for the converter)
+  and collects answers from `practice-convert-out` (contract `practice-convert/1`, `src/convert.js`). Jobs
+  are transient and are not backed up.
+- **What it refuses**: the app checks each file first. Files saved in MuseScore 4.0–4.5 formats (and pre-3
+  or newer than 4.6) are refused with advice to re-save in MuseScore 4.6; 3.x and 4.6 convert exactly as on
+  the laptop (practice slice 11, S0: 1133/1133 and 20/20).
+- **Idle cost**: a shell loop polling once a second; MuseScore runs only during a job (peak ~130 MB).
+- **The existing books** keep their laptop exports (sidecars); the converter is only for uploads.
 
 ### Sign-in page (chg-004)
 

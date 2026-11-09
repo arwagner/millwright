@@ -132,6 +132,9 @@ services:
         COPY config ./config
         # A new named volume copies this folder's ownership, so the app can write its home.
         RUN mkdir -p /var/lib/practice && chown node:node /var/lib/practice
+        # chg-005: the converter spool's mount points; world-writable so a fresh volume works for the app
+        # (uid 1000) and practice-convert (uid 10001), whichever container mounts it first.
+        RUN mkdir -p /spool/convert/in /spool/convert/out && chmod 0777 /spool/convert/in /spool/convert/out
         USER node
         CMD ["node", "src/server.js"]
     restart: unless-stopped
@@ -152,6 +155,9 @@ services:
       # No MuseScore on the box: scans use MusicXML exported on the laptop (sidecars).
       PRACTICE_EXPORTER: sidecar
       PRACTICE_SIDECAR_DIR: /srv/practice-exports
+      # chg-005: uploaded .mscz go to practice-convert through this spool (src/convert.js, practice-convert/1).
+      PRACTICE_CONVERT_IN: /spool/convert/in
+      PRACTICE_CONVERT_OUT: /spool/convert/out
     volumes:
       # Live database, pointer, restored copies and the app's own snapshots. Local volume
       # only: the app's POSIX locks need a local Linux filesystem.
@@ -171,6 +177,9 @@ services:
         read_only: true
         bind:
           create_host_path: false
+      # chg-005: the converter spool. The app writes jobs to in/ and collects answers from out/.
+      - practice-convert-in:/spool/convert/in
+      - practice-convert-out:/spool/convert/out
     tmpfs:
       # Maintenance socket folder: in-container only, owned by the app's user, mode 700.
       - /run/practice:uid=1000,gid=1000,mode=0700
@@ -181,6 +190,31 @@ services:
     # Box: 2 cores, 7.8 GB, no swap. The app is small; keep it from crowding the others.
     mem_limit: 768m
     cpus: 1.0
+
+  # chg-005: MuseScore 4.6.5 converting uploaded .mscz to MusicXML (practice repo convert/, delivered with
+  # the app by deploy/deploy.sh). It parses files from the internet, so it is boxed in: no network at all,
+  # a read-only root, a non-root user, no capabilities, 1.5 GB with no swap (the box has none), 1 CPU,
+  # 64 processes, 120 s per batch (inside). It sees only the spool: jobs read-only, answers writable. No
+  # database, practice home, scores or secrets.
+  practice-convert:
+    container_name: practice-convert
+    build:
+      context: /opt/practice/app/convert
+    restart: unless-stopped
+    init: true
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    volumes:
+      - practice-convert-in:/spool/in:ro
+      - practice-convert-out:/spool/out
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    cpus: 1.0
+    pids_limit: 64
 
   # litellm — retired to cold storage (decision 10). Config kept in litellm/.
   # Uncomment to resurrect; master key comes from /srv/secrets/litellm.env.
@@ -219,3 +253,6 @@ volumes:
   # chg-003: the practice app's home (live SQLite database, pointer, its own verified
   # snapshots). Backed up nightly through the app (scripts/practice-backup.sh).
   practice-data:
+  # chg-005: the converter spool (transient jobs only; never backed up).
+  practice-convert-in:
+  practice-convert-out:
