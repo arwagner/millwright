@@ -27,12 +27,15 @@ nightly backup.
   in-container socket, copied home and verified again before it lands in Dropbox (never `sqlite3`,
   never a copy of the live file). Practice scores and their MusicXML are private: delivered to the
   box over SSH, never in this repository or an image.
+  Gandalf's database (chg-006) is backed up nightly by the running app's own online snapshot,
+  copied home and verified again before it lands in Dropbox (never a copy of the live file); its
+  image files are copied additively (content-hashed names, never deleted at home).
 
 ## Product invariants
 - The IP address 187.124.159.132 does not change across rebuilds.
 - Terraform owns every DNS record for vawagners.cloud; nothing else creates or edits them. The
   record set (reconciled against the Hostinger panel 2026-08-17): A records at the apex, todo,
-  exploring-elan, fiddlesticks, tiamat (chg-002), and practice (chg-003), plus www (currently a
+  exploring-elan, fiddlesticks, tiamat (chg-002), practice (chg-003) and gandalf (chg-006), plus www (currently a
   CNAME to the apex). The panel's two
   extra records, n8n and llm, point at the box with nothing behind them — Andrew approved dropping
   both at the DNS adoption, so they are deleted and not recreated.
@@ -41,7 +44,8 @@ nightly backup.
   (proxy to todo:8787), exploring-elan.vawagners.cloud (static client + /api/* to myron-api:3001),
   fiddlesticks.vawagners.cloud (static), tiamat.vawagners.cloud (static, from the host path
   `/var/www/tiamat`, delivered by the Tiamat wiki's `deploy.sh`), practice.vawagners.cloud (Caddy
-  basic auth, then proxy to practice:8770 on an internal-only network; chg-003).
+  basic auth, then proxy to practice:8770 on an internal-only network; chg-003), gandalf.vawagners.cloud
+  (proxy to gandalf:3000 on an internal-only network; the app's own accounts; chg-006).
 - A blank box can clone millwright without any credential.
 
 ## Cross-cutting constraints
