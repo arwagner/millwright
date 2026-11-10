@@ -65,3 +65,12 @@ resource "hostinger_dns_record" "practice" {
   value = local.ip
   ttl   = 300
 }
+
+resource "hostinger_dns_record" "gandalf" {
+  # chg-006: Gandalf (proxied to the gandalf container; the app has its own accounts).
+  zone  = local.zone
+  name  = "gandalf"
+  type  = "A"
+  value = local.ip
+  ttl   = 300
+}

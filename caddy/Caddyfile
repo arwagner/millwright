@@ -131,3 +131,17 @@ practice.vawagners.cloud {
 		respond `<!doctype html><meta name="viewport" content="width=device-width"><meta http-equiv="refresh" content="0;url=/signin"><p><a href="/signin">Sign in</a></p>` 401
 	}
 }
+
+# chg-006: Gandalf. Its own accounts: the GM and Players sign in in the app, so nothing here
+# authenticates. Caddy terminates TLS and proxies, WebSockets included (the live table and the GM's
+# AI runner at /api/worker). Host passes through unchanged (the app compares Origin with Host).
+# Caddy replaces any client X-Forwarded-For with the real address; the app trusts exactly one hop
+# (TRUST_PROXY=1 in compose.yaml). No size limit here: library uploads are limited by the app.
+gandalf.vawagners.cloud {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	encode zstd gzip
+	reverse_proxy gandalf:3000
+}

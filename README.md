@@ -15,25 +15,26 @@ no credentials. Secrets live in Dropbox, never here.
 | fiddlesticks.vawagners.cloud | static, `sites/fiddlesticks` |
 | tiamat.vawagners.cloud | static, `/var/www/tiamat` (rsync'd by the Tiamat wiki's `deploy.sh`) |
 | practice.vawagners.cloud | basic auth or the sign-in cookie, then proxy to practice:8770 (piano practice app; see [Practice](#practice)) |
+| gandalf.vawagners.cloud | proxy to gandalf:3000; the app's own accounts (tabletop app; see [Gandalf](#gandalf)) |
 
 ## Layout
 
 ```
 terraform/        DNS records, SSH key, post-install script (NEVER the VPS subscription)
 bootstrap.sh      blank box -> Compose host (docker, ufw, sshd hardening, clone)
-compose.yaml      caddy, todo, myron-api, myron-bot, practice, practice-convert; litellm commented out
+compose.yaml      caddy, todo, myron-api, myron-bot, practice, practice-convert, gandalf; litellm commented out
 caddy/Caddyfile   TLS (ACME), static sites, reverse proxies
 caddy/practice-signin/  the practice sign-in page (chg-004), mounted into caddy
 sites/            vawagners + fiddlesticks static content (tiamat lives in its own repo)
 litellm/          cold storage; every key comes from env
-scripts/          rebuild.sh, backup.sh, verify.sh, launchd plist; practice-{backup,restore,auth}.sh
+scripts/          rebuild.sh, backup.sh, verify.sh, launchd plist; practice-{backup,restore,auth}.sh; gandalf-{backup,restore}.sh
 spec/             spec-flow workspace (specs, plans, gates)
 ```
 
 ## Rebuild runbook
 
 1. `scripts/backup.sh` on the laptop — fresh `todo.db` snapshot + Caddy cert volume + the practice
-   app's own verified snapshot (`backup/practice/`).
+   app's own verified snapshot (`backup/practice/`) + Gandalf's snapshot and new image files (`backup/gandalf/`).
 2. `scripts/rebuild.sh` — calls the Hostinger `recreate` endpoint. Free, keeps the IP,
    **wipes the box and deletes Hostinger snapshots**. Needs `HOSTINGER_API_TOKEN`, `VM_ID`,
    `TEMPLATE_ID` (discover with `--list` / `--templates`).
@@ -44,6 +45,8 @@ spec/             spec-flow workspace (specs, plans, gates)
    (`~/Dropbox/andrew/D&D/sessions/Tiamat/wiki`). Deliver practice without starting it:
    `deploy/deploy.sh --rev <reviewed commit> --no-start` in the practice repo (code, private scores,
    MusicXML sidecars).
+   Deliver Gandalf without starting it, in the Gandalf repo:
+   `deploy/deploy.sh --host root@187.124.159.132 --rev <reviewed commit> --no-start`.
 6. Copy secret env files from `~/Dropbox/andrew/secrets/millwright/` to `/srv/secrets/` (this includes
    `practice-auth.env`; caddy refuses to start without it), then
    `chmod 700 /srv/secrets && chmod 600 /srv/secrets/*.env`.
@@ -53,9 +56,12 @@ spec/             spec-flow workspace (specs, plans, gates)
    recreate accounts by hand: `docker compose exec myron-api npm run users -- add <name>`.
    Practice: `scripts/practice-restore.sh <newest backup/practice/practice-….sqlite>` (laptop; the
    practice service is not running yet), which verifies the pair, imports it and restores it.
+   Gandalf: `scripts/gandalf-restore.sh <newest backup/gandalf/gandalf-….db>` (laptop; gandalf not running
+   yet) sends the image files and the database.
 8. `cd /srv/millwright && docker compose up -d --build` (this also builds practice-convert, which downloads
    the pinned MuseScore AppImage from GitHub).
-9. Check each hostname over HTTPS (practice: 401 without credentials, whose body links `/signin`; `/signin` 200; the app with them); on the box,
+9. Check each hostname over HTTPS (practice: 401 without credentials, whose body links `/signin`; `/signin` 200; the app with them; gandalf: the sign-in page, then sign in
+   and re-pair the AI runner, see [Gandalf](#gandalf)); on the box,
    `ps axww | grep TODO_TOKEN` must find nothing and `pm2`/`nginx`/`ollama` must not exist.
 
 ## Nightly backup
@@ -76,6 +82,15 @@ cannot touch it. `scripts/practice-backup.sh` asks the running app for its norma
 (`docker exec practice node src/admin.js backup`, a local socket, no credential), copies that finished
 snapshot and manifest home, verifies them again (size, sha256, integrity, foreign keys, every table
 count) and publishes them into `backup/practice/`, manifest last. Any failure publishes nothing.
+
+Gandalf (chg-006) is backed up through the running app too: `scripts/gandalf-backup.sh` asks it for an online
+snapshot (`docker exec gandalf node src/server/cli.ts backup`), verifies it again at home (size, sha256,
+integrity, migrations, every table count), copies new image files additively into `backup/gandalf/assets/`
+(names are content hashes; nothing is deleted at home, so every older snapshot keeps its files), checks
+that every image the snapshot names is there, and publishes snapshot then manifest. The box keeps its 7
+newest snapshots. `backup.sh` runs practice, then Gandalf; both always run. Until the cutover the Gandalf
+step says "nothing to back up" and passes (no volume, or no `gandalf.db` in it). Once `gandalf.db` exists it
+fails loudly whenever the gandalf container isn't running (including after a rollback to the Mac).
 
 ## todo MCP adapter
 
@@ -108,6 +123,7 @@ Names, for the grep in `scripts/verify.sh`:
 | litellm.env | `LITELLM_MASTER_KEY` | litellm, if ever resurrected (rotate: the old key is burned) |
 | hostinger-api-token | `HOSTINGER_API_TOKEN` | rebuild.sh |
 | practice-auth.env | `PRACTICE_AUTH_USER`, `PRACTICE_AUTH_HASH` (bcrypt, single-quoted), `PRACTICE_SESSION_SECRET` (64 hex, the sign-in cookie) | caddy, for practice.vawagners.cloud |
+| (none) | — | gandalf: needs no secret; its accounts and the AI runner's credential hashes live in its database |
 
 ## Known risks
 
@@ -233,3 +249,63 @@ service ran), stops the service, then decides from the data which copy is author
   `practice use-db <file>` (the server then has a pointer again), and rerun; the rollback never guesses.
 
 The server stays stopped afterwards; it is the record, not a second schedule.
+
+## Gandalf
+
+Gandalf, the tabletop GM/Player app (code in its own repo; delivered by its `deploy/deploy.sh`).
+
+- **Auth**: the app's own accounts (GM and Players). Caddy adds TLS and HSTS only. Sign-in, join and
+  pairing are rate-limited by client address; `TRUST_PROXY: "1"` makes that the real address behind caddy.
+- **Network**: `gandalf` sits only on the internal `gandalf` network (with caddy): no host port, no route
+  out. The GM's AI runner connects in to `wss://gandalf.vawagners.cloud/api/worker`; Gandalf calls nothing.
+- **Data**: the `gandalf-data` volume: `gandalf.db` (SQLite, WAL) and `assets/` (~6 GB of image files
+  named by their content hash). No secret anywhere.
+- **Delivery**: `deploy/deploy.sh --host root@187.124.159.132 --rev <reviewed commit>` in the Gandalf
+  repo: `git archive` to `/opt/gandalf/releases/<sha>`, `/opt/gandalf/app` → that release, a snapshot of the running app first,
+  then `docker compose up -d --build gandalf` (`--no-start`: build and `up --no-start gandalf` only).
+  Migrations run at start; the snapshot taken first is the way back.
+- **Memory**: 2560 MB, one CPU, one library import at a time.
+
+### Moving Gandalf from the Mac (cutover)
+
+Gandalf is never started on the box before this, so no empty second database is ever created there.
+
+Before (any day, the Mac stays live). In the Gandalf repo, with `C` = the delivered commit:
+1. Deliver without starting: `deploy/deploy.sh --host root@187.124.159.132 --rev $C --no-start` (builds
+   the image; `up --no-start gandalf` makes the container and the empty volume).
+2. Build a helper image of exactly that commit from a clean `git archive` (never the working tree, which
+   may hold uncommitted files), tagged apart from the Mac's own stack:
+   `git archive --format=tar $C | docker build -t gandalf-cutover:$C -`
+3. Copy the Mac's image files to the backup folder (read-only on the Mac's volume):
+   `docker run --rm -v gandalf_gandalf-data:/d:ro -v ~/Dropbox/andrew/secrets/millwright/backup/gandalf/assets:/out gandalf-cutover:$C cp -an /d/assets/. /out/`
+4. Pre-seed the box: `scripts/gandalf-restore.sh --assets-only`.
+
+The cutover (about 10 minutes; Players and GM off):
+1. Mac, in the Gandalf repo: `docker compose stop app`.
+2. Mac: the final snapshot. Its name must be exactly `gandalf-YYYYMMDD-HHMMSSZ.db` (UTC), or restore refuses it:
+   `N=gandalf-$(date -u +%Y%m%d-%H%M%SZ).db`
+   `docker run --rm -v gandalf_gandalf-data:/data gandalf-cutover:$C node src/server/cli.ts backup /data/backups/$N`
+   then copy the pair out:
+   `docker run --rm -v gandalf_gandalf-data:/d:ro gandalf-cutover:$C cat /d/backups/$N > ~/Dropbox/andrew/secrets/millwright/backup/gandalf/$N`
+   and the same for `$N.manifest.json`.
+3. Repeat "Before" step 3 (only new image files move).
+4. `scripts/gandalf-restore.sh ~/Dropbox/andrew/secrets/millwright/backup/gandalf/$N`. It also checks that every
+   image the snapshot names is on the box.
+5. On the box: `cd /srv/millwright && docker compose up -d gandalf`.
+6. Check: https://gandalf.vawagners.cloud answers; the GM signs in; a Player signs in from another
+   device; the GM re-pairs the AI runner: `npm run runner -- pair --origin https://gandalf.vawagners.cloud`.
+7. The Mac stays stopped (`docker compose stop`). Do not start it again; it is the rollback, not a copy.
+
+### Rollback (back to the Mac)
+
+On the box: `docker compose stop gandalf`, then keep a record of everything written there (the service is
+stopped, so the nightly script can't do it):
+`docker compose run --rm --no-deps -T gandalf node src/server/cli.ts backup /data/backups/gandalf-<UTC stamp>.db`.
+Start the Mac: `docker compose start app` in the Gandalf repo. What that gives you, plainly:
+- **Only on the Mac:** the Mac stack listens on 127.0.0.1 only. Remote Players lose access, and
+  https://gandalf.vawagners.cloud answers 502 (Caddy's target is stopped).
+- **The AI runner** must be re-paired to the Mac: `npm run runner -- pair --origin http://127.0.0.1:8080`.
+- **The nightly backup fails every night** for its Gandalf step (gandalf.db on the box, container stopped),
+  until Gandalf runs on the box again or chg-006 is reverted. That is deliberate: it must not pass silently.
+- **Anything written on the box** after the cutover is NOT on the Mac. It stays in that record and is merged
+  by hand, if at all.
