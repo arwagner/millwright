@@ -130,23 +130,28 @@ GOT=$(run sha256sum "$STAGE/gandalf.db" | cut -c1-64)
 # snapshot's sha256 and no -wal/-shm sits beside it.
 SWITCHING=1; rc=0
 SAID=$(run sh -s -- "$STAGE" "$ID" "$REPLACE" "$SNAP_SHA" <<'BOX'
-set -eu
-stage=$1; id=$2; replace=$3; want=$4
-cd /data
-if [ -e gandalf.db ] || [ -e gandalf.db-wal ]; then
-  [ "$replace" = 1 ] || { echo "gandalf restore: the box already has a database; rerun with --replace to move it to /data/replaced-$id/ first" >&2; exit 3; }
-fi
-moved=""
-for f in gandalf.db gandalf.db-wal gandalf.db-shm; do
-  if [ -e "$f" ]; then mkdir -p "replaced-$id"; mv "$f" "replaced-$id/$f"; moved="$moved $f"; fi
-done
-for f in gandalf.db gandalf.db-wal gandalf.db-shm; do [ ! -e "$f" ] || { echo "gandalf restore: /data/$f is still there after moving it aside" >&2; exit 1; }; done
-mv "$stage/gandalf.db" gandalf.db
-got=$(sha256sum gandalf.db | cut -c1-64)
-[ "$got" = "$want" ] || { echo "gandalf restore: /data/gandalf.db has sha256 $got, not the snapshot's" >&2; exit 1; }
-for f in gandalf.db-wal gandalf.db-shm; do [ ! -e "$f" ] || { echo "gandalf restore: /data/$f appeared beside the new database" >&2; exit 1; }; done
-rm -rf /data/import
-echo "switched${moved:+; moved aside to /data/replaced-$id/:$moved}"
+# The whole body is one function, called on the last line: sh parses it to the closing brace before
+# running any of it, so a script cut off in transit is a syntax error and runs nothing.
+main() {
+  set -eu
+  stage=$1; id=$2; replace=$3; want=$4
+  cd /data
+  if [ -e gandalf.db ] || [ -e gandalf.db-wal ]; then
+    [ "$replace" = 1 ] || { echo "gandalf restore: the box already has a database; rerun with --replace to move it to /data/replaced-$id/ first" >&2; exit 3; }
+  fi
+  moved=""
+  for f in gandalf.db gandalf.db-wal gandalf.db-shm; do
+    if [ -e "$f" ]; then mkdir -p "replaced-$id"; mv "$f" "replaced-$id/$f"; moved="$moved $f"; fi
+  done
+  for f in gandalf.db gandalf.db-wal gandalf.db-shm; do [ ! -e "$f" ] || { echo "gandalf restore: /data/$f is still there after moving it aside" >&2; exit 1; }; done
+  mv "$stage/gandalf.db" gandalf.db
+  got=$(sha256sum gandalf.db | cut -c1-64)
+  [ "$got" = "$want" ] || { echo "gandalf restore: /data/gandalf.db has sha256 $got, not the snapshot's" >&2; exit 1; }
+  for f in gandalf.db-wal gandalf.db-shm; do [ ! -e "$f" ] || { echo "gandalf restore: /data/$f appeared beside the new database" >&2; exit 1; }; done
+  rm -rf /data/import
+  echo "switched${moved:+; moved aside to /data/replaced-$id/:$moved}"
+}
+main "$@"
 BOX
 ) || rc=$?
 # 3 = refused before anything moved (an existing database without --replace)
