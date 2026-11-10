@@ -56,11 +56,15 @@ PY
 fi
 [ -d "$ASSETS" ] || { echo "gandalf restore: no image-file folder at $ASSETS; nothing was sent" >&2; exit 1; }
 
-# The service must be stopped or never started (the running app owns gandalf.db).
-if [ -n "$(box $COMPOSE ps --status running -q gandalf)" ]; then
-  echo "gandalf restore: the gandalf service is running; stop it first (docker compose stop gandalf). Nothing was changed." >&2
-  exit 1
-fi
+# The service must be stopped or never started (the running app owns gandalf.db). Fails closed: only a
+# check that worked and shows no container, or only created/exited ones, counts as stopped.
+STATES=$(box $COMPOSE ps -a --format '{{.State}}' gandalf) || { echo "gandalf restore: could not check whether gandalf runs; nothing was changed" >&2; exit 1; }
+for st in $STATES; do
+  case "$st" in
+    created|exited) ;;
+    *) echo "gandalf restore: the gandalf service is $st; stop it first (docker compose stop gandalf). Nothing was changed." >&2; exit 1 ;;
+  esac
+done
 
 ASSETS_DIR="${GANDALF_ASSETS_DIR:-$(box docker volume inspect -f '{{.Mountpoint}}' "$VOLUME")/assets}"
 [[ "$ASSETS_DIR" =~ ^/[A-Za-z0-9_./-]+/assets$ ]] || { echo "gandalf restore: unexpected assets path $ASSETS_DIR" >&2; exit 1; }
@@ -101,23 +105,54 @@ PY
 # 3: the database
 ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 STAGE="/data/import/$ID"
-FINISHED=0
-cleanup() { local rc=$?; rm -f "$LISTING"; [ "$FINISHED" = 1 ] || [ "$rc" != 0 ] || rc=1; if [ "$FINISHED" = 0 ]; then run rm -rf /data/import >/dev/null 2>&1 || true; echo "gandalf restore: FAILED (exit $rc); gandalf.db was not switched" >&2; fi; exit $rc; }
+FINISHED=0; SWITCHING=0
+cleanup() {
+  local rc=$?; rm -f "$LISTING"; [ "$FINISHED" = 1 ] || [ "$rc" != 0 ] || rc=1
+  if [ "$FINISHED" = 0 ]; then
+    run rm -rf /data/import >/dev/null 2>&1 || true
+    if [ "$SWITCHING" = 1 ]; then
+      echo "gandalf restore: FAILED (exit $rc) during the switch; check /data on the box before starting gandalf (anything moved aside is in /data/replaced-$ID/)" >&2
+    else
+      echo "gandalf restore: FAILED (exit $rc); gandalf.db was not switched" >&2
+    fi
+  fi
+  exit $rc
+}
 trap cleanup EXIT
 run rm -rf /data/import
 run mkdir -p "$STAGE"
 run dd "of=$STAGE/gandalf.db" status=none < "$SNAP_PATH"
 GOT=$(run sha256sum "$STAGE/gandalf.db" | cut -c1-64)
 [ "$GOT" = "$SNAP_SHA" ] || { echo "gandalf restore: sha256 on the box ($GOT) differs from the snapshot" >&2; exit 1; }
-if run test -e /data/gandalf.db || run test -e /data/gandalf.db-wal; then
-  [ "$REPLACE" = 1 ] || { echo "gandalf restore: the box already has a database; rerun with --replace to move it to /data/replaced-$ID/ first" >&2; exit 1; }
-  run mkdir "/data/replaced-$ID"
-  for f in gandalf.db gandalf.db-wal gandalf.db-shm; do
-    if run test -e "/data/$f"; then run mv "/data/$f" "/data/replaced-$ID/$f"; fi
-  done
+# The check and the switch run as ONE script on the box (sent on stdin, so nothing passes through the
+# box's shell as words). Any failure there, or a lost link, is a non-zero exit: an existing database or
+# its -wal/-shm is never read as "absent". It ends by checking the result on the box: gandalf.db has the
+# snapshot's sha256 and no -wal/-shm sits beside it.
+SWITCHING=1; rc=0
+SAID=$(run sh -s -- "$STAGE" "$ID" "$REPLACE" "$SNAP_SHA" <<'BOX'
+set -eu
+stage=$1; id=$2; replace=$3; want=$4
+cd /data
+if [ -e gandalf.db ] || [ -e gandalf.db-wal ]; then
+  [ "$replace" = 1 ] || { echo "gandalf restore: the box already has a database; rerun with --replace to move it to /data/replaced-$id/ first" >&2; exit 3; }
 fi
-run mv -n "$STAGE/gandalf.db" /data/gandalf.db
-run test -e /data/gandalf.db
-run rm -rf /data/import
+moved=""
+for f in gandalf.db gandalf.db-wal gandalf.db-shm; do
+  if [ -e "$f" ]; then mkdir -p "replaced-$id"; mv "$f" "replaced-$id/$f"; moved="$moved $f"; fi
+done
+for f in gandalf.db gandalf.db-wal gandalf.db-shm; do [ ! -e "$f" ] || { echo "gandalf restore: /data/$f is still there after moving it aside" >&2; exit 1; }; done
+mv "$stage/gandalf.db" gandalf.db
+got=$(sha256sum gandalf.db | cut -c1-64)
+[ "$got" = "$want" ] || { echo "gandalf restore: /data/gandalf.db has sha256 $got, not the snapshot's" >&2; exit 1; }
+for f in gandalf.db-wal gandalf.db-shm; do [ ! -e "$f" ] || { echo "gandalf restore: /data/$f appeared beside the new database" >&2; exit 1; }; done
+rm -rf /data/import
+echo "switched${moved:+; moved aside to /data/replaced-$id/:$moved}"
+BOX
+) || rc=$?
+# 3 = refused before anything moved (an existing database without --replace)
+if [ "$rc" = 3 ]; then SWITCHING=0; exit 1; fi
+[ "$rc" = 0 ] || exit "$rc"
+case "$SAID" in switched*) ;; *) echo "gandalf restore: the switch on the box said \"$SAID\"" >&2; exit 1 ;; esac
+echo "gandalf restore: $SAID"
 FINISHED=1
 echo "gandalf restore ok: $SNAP (sha256 $SNAP_SHA) is the database gandalf opens on its next start"
