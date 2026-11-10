@@ -45,13 +45,19 @@ box() { $SSH "$BOX" "$@"; }
 
 # 0: is there anything to back up? Reachability first, so an ssh failure is never read as "not deployed".
 box true || { echo "gandalf backup: FAILED: cannot reach the box; nothing published" >&2; exit 1; }
-if ! MP=$(box docker volume inspect -f '{{.Mountpoint}}' "$VOLUME" 2>/dev/null); then
+# Only a clear "absent" skips: a listing or a check that fails (a daemon error, a dropped link) fails the step.
+VOLS=$(box docker volume ls -q) || { echo "gandalf backup: FAILED: cannot list the box's volumes; nothing published" >&2; exit 1; }
+if ! grep -Fxq -- "$VOLUME" <<< "$VOLS"; then
   echo "gandalf backup: no $VOLUME volume on the box (Gandalf not delivered yet); nothing to back up"; exit 0
 fi
+MP=$(box docker volume inspect -f '{{.Mountpoint}}' "$VOLUME") || { echo "gandalf backup: FAILED: cannot inspect $VOLUME; nothing published" >&2; exit 1; }
 [[ "$MP" =~ ^/[A-Za-z0-9_./-]+$ ]] || { echo "gandalf backup: unexpected volume path $MP" >&2; exit 1; }
-if ! box test -e "$MP/gandalf.db"; then
-  echo "gandalf backup: $VOLUME holds no gandalf.db yet (before the cutover); nothing to back up"; exit 0
-fi
+rc=0; box test -e "$MP/gandalf.db" || rc=$?
+case "$rc" in
+  0) ;;
+  1) echo "gandalf backup: $VOLUME holds no gandalf.db yet (before the cutover); nothing to back up"; exit 0 ;;
+  *) echo "gandalf backup: FAILED: checking for gandalf.db failed (exit $rc); nothing published" >&2; exit 1 ;;
+esac
 STATE=$(box docker inspect -f '{{.State.Status}}' "$CONTAINER" 2>/dev/null || echo missing)
 [ "$STATE" = running ] || { echo "gandalf backup: FAILED: gandalf.db exists on the box but the gandalf container is $STATE; nothing published" >&2; exit 1; }
 
