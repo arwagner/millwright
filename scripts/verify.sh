@@ -19,12 +19,12 @@ check feat-001/AC-1 "provider pinned = 0.1.22"      grep -q 'version = "= 0.1.22
 check feat-001/AC-1 "no hostinger_vps resource"     bash -c '! grep -q "resource \"hostinger_vps\"" terraform/*.tf'
 check feat-001/AC-1 "ssh key ref ends in .pub"      bash -c 'grep -q "file(\"~/.ssh/id_ed25519.pub\")" terraform/ssh.tf && ! grep -E "file\(.*id_ed25519\"\)" terraform/ssh.tf'
 
-# ---- feat-001/AC-2: exactly the seven records (chg-002 adds tiamat, chg-003 practice), all -> the box IP
-check feat-001/AC-2 "exactly 7 dns records"         bash -c '[ "$(grep -c "resource \"hostinger_dns_record\"" terraform/dns.tf)" = 7 ]'
-for n in '"@"' '"www"' '"todo"' '"exploring-elan"' '"fiddlesticks"' '"tiamat"' '"practice"'; do
+# ---- feat-001/AC-2: exactly the eight records (chg-002 tiamat, chg-003 practice, chg-006 gandalf), all -> the box IP
+check feat-001/AC-2 "exactly 8 dns records"         bash -c '[ "$(grep -c "resource \"hostinger_dns_record\"" terraform/dns.tf)" = 8 ]'
+for n in '"@"' '"www"' '"todo"' '"exploring-elan"' '"fiddlesticks"' '"tiamat"' '"practice"' '"gandalf"'; do
   check feat-001/AC-2 "record name $n"              grep -q "name  = $n" terraform/dns.tf
 done
-check feat-001/AC-2 "all records -> 187.124.159.132" bash -c '[ "$(grep -c "value = local.ip" terraform/dns.tf)" = 7 ] && grep -q "ip   = \"187.124.159.132\"" terraform/dns.tf'
+check feat-001/AC-2 "all records -> 187.124.159.132" bash -c '[ "$(grep -c "value = local.ip" terraform/dns.tf)" = 8 ] && grep -q "ip   = \"187.124.159.132\"" terraform/dns.tf'
 
 # ---- feat-001/AC-3: bootstrap syntax + docker, ufw, keys, clone, sshd
 check feat-001/AC-3 "bash -n bootstrap.sh"          bash -n bootstrap.sh
@@ -44,7 +44,7 @@ check feat-001/AC-4 "compose config valid"          test -n "$CJSON"
 check feat-001/AC-4 "services + restart + ports only on caddy" bash -c "echo \"\$1\" | python3 -c '
 import json,sys
 s=json.load(sys.stdin)[\"services\"]
-assert set(s) == {\"caddy\",\"todo\",\"myron-api\",\"myron-bot\",\"practice\",\"practice-convert\"}, set(s)
+assert set(s) == {\"caddy\",\"todo\",\"myron-api\",\"myron-bot\",\"practice\",\"practice-convert\",\"gandalf\"}, set(s)
 assert all(v.get(\"restart\")==\"unless-stopped\" for v in s.values())
 assert [k for k,v in s.items() if v.get(\"ports\")] == [\"caddy\"]
 '" _ "$CJSON"
@@ -71,7 +71,7 @@ assert \"myron-auth\" in json.load(sys.stdin).get(\"volumes\",{})
 
 # ---- feat-001/AC-5: caddyfile valid, five hostnames + www redirect
 check feat-001/AC-5 "caddy validate"                docker run --rm -v "$PWD/caddy/Caddyfile":/etc/caddy/Caddyfile:ro caddy:2 caddy validate --config /etc/caddy/Caddyfile
-for h in vawagners.cloud todo.vawagners.cloud exploring-elan.vawagners.cloud fiddlesticks.vawagners.cloud tiamat.vawagners.cloud practice.vawagners.cloud; do
+for h in vawagners.cloud todo.vawagners.cloud exploring-elan.vawagners.cloud fiddlesticks.vawagners.cloud tiamat.vawagners.cloud practice.vawagners.cloud gandalf.vawagners.cloud; do
   check feat-001/AC-5 "site $h"                     grep -q "^$h" caddy/Caddyfile
 done
 check feat-001/AC-5 "www redirects to apex"         bash -c 'grep -A1 "^www.vawagners.cloud" caddy/Caddyfile | grep -q "redir https://vawagners.cloud"'
@@ -92,7 +92,7 @@ assert p.get(\"container_name\")==\"practice\" and p.get(\"restart\")==\"unless-
 assert not p.get(\"ports\"), p.get(\"ports\")
 assert list(p[\"networks\"])==[\"practice\"], p[\"networks\"]
 assert c[\"networks\"][\"practice\"].get(\"internal\") is True
-assert set(c[\"services\"][\"caddy\"][\"networks\"])=={\"default\",\"practice\"}
+assert set(c[\"services\"][\"caddy\"][\"networks\"])=={\"default\",\"practice\",\"gandalf\"}
 for k,v in c[\"services\"].items():
     if k not in (\"caddy\",\"practice\"): assert \"practice\" not in (v.get(\"networks\") or {}), k
 e=p[\"environment\"]
@@ -142,6 +142,41 @@ assert \"chmod 0777 /spool/convert/in /spool/convert/out\" in p[\"build\"][\"doc
 assert {\"practice-convert-in\",\"practice-convert-out\"} <= set(c[\"volumes\"])
 '" _ "$CJSON"
 check feat-001/AC-18 "README: converter section" bash -c 'grep -q "^### Converter (chg-005)" README.md && grep -q "practice-convert" README.md'
+
+# ---- feat-001/AC-19 (chg-006): gandalf service — internal-only, one volume, exact non-secret env, capped
+check feat-001/AC-19 "gandalf service shape" bash -c "echo \"\$1\" | python3 -c '
+import json,sys
+c=json.load(sys.stdin); g=c[\"services\"][\"gandalf\"]
+assert g.get(\"container_name\")==\"gandalf\" and g.get(\"restart\")==\"unless-stopped\" and g.get(\"init\") is True
+assert g[\"build\"][\"context\"]==\"/opt/gandalf/app\" and not g[\"build\"].get(\"dockerfile_inline\")
+assert not g.get(\"ports\"), g.get(\"ports\")
+assert list(g[\"networks\"])==[\"gandalf\"], g[\"networks\"]
+assert c[\"networks\"][\"gandalf\"].get(\"internal\") is True
+for k,v in c[\"services\"].items():
+    if k not in (\"caddy\",\"gandalf\"): assert \"gandalf\" not in (v.get(\"networks\") or {}), k
+assert g[\"environment\"]=={\"PUBLIC_ORIGIN\":\"https://gandalf.vawagners.cloud\",\"COOKIE_SECURE\":\"true\",\"TRUST_PROXY\":\"1\",\"GANDALF_AI_PROVIDER\":\"session\",\"IMPORT_RUNNING\":\"1\"}, g[\"environment\"]
+assert not g.get(\"env_file\"), \"gandalf needs no secret\"
+v=g[\"volumes\"]
+assert len(v)==1 and v[0][\"type\"]==\"volume\" and v[0][\"source\"]==\"gandalf-data\" and v[0][\"target\"]==\"/data\", v
+assert int(g[\"mem_limit\"])==2560*2**20 and int(g[\"memswap_limit\"])==int(g[\"mem_limit\"]) and float(g[\"cpus\"])==1.0
+assert \"gandalf-data\" in c[\"volumes\"]
+'" _ "$CJSON"
+
+# ---- feat-001/AC-20 (chg-006): gandalf site — HSTS, one plain proxy, no auth, no header rewriting
+check feat-001/AC-20 "gandalf block" bash -c 'b=$(sed -n "/^gandalf.vawagners.cloud {/,/^}/p" caddy/Caddyfile); grep -q "Strict-Transport-Security \"max-age=31536000\"" <<<"$b" && grep -q "reverse_proxy gandalf:3000" <<<"$b" && [ "$(grep -c reverse_proxy <<<"$b")" = 1 ] && ! grep -qE "basic_auth|header_up|trusted_proxies" <<<"$b"'
+
+# ---- feat-001/AC-21 (chg-006): gandalf backup through the app, verified, additive; restore script
+check feat-001/AC-21 "bash -n + executable gandalf scripts" bash -c 'for s in gandalf-backup gandalf-restore; do bash -n scripts/$s.sh && test -x scripts/$s.sh || exit 1; done'
+check feat-001/AC-21 "backup asks the running app, never the live file" bash -c 'grep -q "docker exec \"\$CONTAINER\" node src/server/cli.ts backup" scripts/gandalf-backup.sh && ! grep -E "^[^#]*(cat|cp|rsync)[^#]*/data/gandalf\.db" scripts/gandalf-backup.sh | grep .'
+check feat-001/AC-21 "backup re-verifies sha256, integrity, counts, asset names; manifest last" bash -c 'grep -q "hashlib.sha256" scripts/gandalf-backup.sh && grep -q "PRAGMA integrity_check" scripts/gandalf-backup.sh && grep -q "__drizzle_migrations" scripts/gandalf-backup.sh && grep -q "image file(s) named by the snapshot are missing" scripts/gandalf-backup.sh && [ "$(grep -n "^mv -n" scripts/gandalf-backup.sh | tail -1 | grep -c MAN)" = 1 ]'
+check feat-001/AC-21 "image files additive only, no in-flight .tmp (no --delete anywhere)" bash -c 'for s in gandalf-backup gandalf-restore; do grep -q -- "--ignore-existing --exclude '"'"'\*.tmp'"'"'" scripts/$s.sh || exit 1; done && ! grep -q -- "--delete" scripts/gandalf-backup.sh scripts/gandalf-restore.sh'
+check feat-001/AC-21 "skips only without data; fails unreachable or stopped-with-data" bash -c 'grep -q "cannot reach the box" scripts/gandalf-backup.sh && grep -q "holds no gandalf.db yet" scripts/gandalf-backup.sh && grep -q "gandalf.db exists on the box but the gandalf container is" scripts/gandalf-backup.sh && grep -q "ServerAliveInterval=30" scripts/gandalf-backup.sh'
+check feat-001/AC-21 "backup.sh runs practice then gandalf, both always" bash -c 'p=$(grep -n "practice-backup.sh\" \"\$DEST/practice\" || rc=1" scripts/backup.sh | cut -d: -f1); g=$(grep -n "gandalf-backup.sh\" \"\$DEST/gandalf\" || rc=1" scripts/backup.sh | cut -d: -f1); [ -n "$p" ] && [ -n "$g" ] && [ "$p" -lt "$g" ] && grep -q "^exit \$rc" scripts/backup.sh'
+check feat-001/AC-21 "restore checks every named image is on the box before switching" grep -q "the snapshot names are not on the box" scripts/gandalf-restore.sh
+check feat-001/AC-21 "restore: fails closed on the running check; one box-side switch, checked (sha256, no -wal/-shm)" bash -c 'grep -qF "ps -a --format '"'"'{{.State}}'"'"' gandalf) || {" scripts/gandalf-restore.sh && grep -qF "created|exited) ;;" scripts/gandalf-restore.sh && grep -q "rerun with --replace" scripts/gandalf-restore.sh && grep -q "/data/replaced-" scripts/gandalf-restore.sh && grep -qF "SAID=\$(run sh -s -- " scripts/gandalf-restore.sh && grep -q "appeared beside the new database" scripts/gandalf-restore.sh'
+
+# ---- feat-001/AC-22 (chg-006): README covers Gandalf delivery, backup, cutover, re-pair, rollback
+check feat-001/AC-22 "README gandalf section" bash -c 'grep -q "^## Gandalf" README.md && grep -q "up --no-start gandalf" README.md && grep -q "gandalf-restore.sh --assets-only" README.md && grep -q -- "--origin https://gandalf.vawagners.cloud" README.md && grep -q "^### Rollback (back to the Mac)" README.md'
 
 # ---- feat-001/AC-14 (chg-003): practice site behind basic auth; credentials only from /srv/secrets
 check feat-001/AC-14 "caddy reads practice-auth.env (required)" bash -c "echo \"\$1\" | python3 -c '
@@ -201,6 +236,7 @@ check feat-001/AC-8 "hook rejects a staged .env"    bash -c 'touch probe.env && 
 check feat-001/AC-8 "no key material in files"      bash -c '! grep -rInE "sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|AAAA[A-Za-z0-9+/]{60,}==?[^ ]|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY" --exclude-dir=.git --exclude-dir=.terraform --exclude-dir=.scratchpad --exclude-dir=node_modules .'
 check feat-001/AC-8 "litellm keys via env only"     bash -c '[ "$(grep -c "os.environ/" litellm/config.yaml)" -ge 8 ] && ! grep -E "(master_key|api_key): *[^o[:space:]]" litellm/config.yaml'
 check feat-001/AC-8 "no practice data or private notation tracked" bash -c '! git ls-files | grep -E "\.(sqlite|sqlite-journal|mscz|musicxml)$|(^|/)retired\.json$" | grep .'
+check feat-001/AC-8 "no gandalf data tracked"       bash -c '! git ls-files | grep -E "(^|/)gandalf[^/]*\.db$|\.db\.manifest\.json$|\.db-(wal|shm)$" | grep .'
 check feat-001/AC-8 "no secret VALUES assigned in tracked files" bash -c '! git ls-files -z 2>/dev/null | xargs -0 grep -lE "(TODO_TOKEN|DISCORD_BOT_TOKEN|OPENROUTER_API_KEY|LITELLM_MASTER_KEY|CHANNEL_WHITELIST|DM_WHITELIST)=[A-Za-z0-9]" 2>/dev/null | grep .'
 
 # ---- feat-001/AC-9: README runbook + MCP snippet + two-file note

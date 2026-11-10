@@ -38,6 +38,8 @@ services:
     networks:
       - default
       - practice
+      # chg-006: the internal-only network to the gandalf app.
+      - gandalf
 
   todo:
     # Stable name: backup.sh and the ~/.claude.json MCP snippet `docker exec todo …`
@@ -216,6 +218,42 @@ services:
     cpus: 1.0
     pids_limit: 64
 
+  # chg-006: Gandalf, a tabletop GM/Player app at gandalf.vawagners.cloud. It has its own accounts (the GM
+  # and Players sign in in the app), so Caddy adds TLS only. Code arrives as a `git archive` of a reviewed
+  # Gandalf commit in /opt/gandalf/app (its deploy/deploy.sh); the image builds from that tree's own
+  # multi-stage Dockerfile (base image pinned there by digest), as practice-convert does. The app owns
+  # gandalf.db (SQLite, WAL); backups go through its CLI (scripts/gandalf-backup.sh). No secret, no env_file.
+  gandalf:
+    # Stable name: gandalf-backup.sh `docker exec gandalf …`.
+    container_name: gandalf
+    build:
+      context: /opt/gandalf/app
+    restart: unless-stopped
+    init: true
+    environment:
+      # None of these is a secret.
+      PUBLIC_ORIGIN: https://gandalf.vawagners.cloud
+      # Session cookies are Secure (served over HTTPS).
+      COOKIE_SECURE: "true"
+      # Exactly one proxy (caddy) in front: sign-in, join and pairing limits see the client's address.
+      # Only caddy shares the internal network, and Caddy replaces any client X-Forwarded-For.
+      TRUST_PROXY: "1"
+      # AI drafts come from the GM's own paired runner (it connects out to wss://…/api/worker); no API key.
+      GANDALF_AI_PROVIDER: session
+      # One library image import at a time: a 16384² image can take 1.5–2 GB while it is processed.
+      IMPORT_RUNNING: "1"
+    volumes:
+      # gandalf.db and assets/ (content-addressed image files). Local volume: SQLite needs a local filesystem.
+      - gandalf-data:/data
+    networks:
+      - gandalf
+    expose:
+      - "3000"
+    # Box: 2 cores, 7.8 GB, no swap. Room for one large import; keep it from crowding the others.
+    mem_limit: 2560m
+    memswap_limit: 2560m
+    cpus: 1.0
+
   # litellm — retired to cold storage (decision 10). Config kept in litellm/.
   # Uncomment to resurrect; master key comes from /srv/secrets/litellm.env.
   # litellm:
@@ -232,6 +270,9 @@ services:
 networks:
   # chg-003: internal — no route out, no host port; only caddy and practice are attached.
   practice:
+    internal: true
+  # chg-006: internal — no route out, no host port; only caddy and gandalf are attached.
+  gandalf:
     internal: true
 
 volumes:
@@ -256,3 +297,6 @@ volumes:
   # chg-005: the converter spool (transient jobs only; never backed up).
   practice-convert-in:
   practice-convert-out:
+  # chg-006: Gandalf's database and image files. Backed up nightly through the app plus an additive
+  # copy of new image files (scripts/gandalf-backup.sh).
+  gandalf-data:
