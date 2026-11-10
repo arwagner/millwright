@@ -84,7 +84,9 @@ box find "$ASSETS_DIR" -maxdepth 1 -type f -size +0c > "$LISTING"
 python3 - "$SNAP_PATH" "$LISTING" <<'PY'
 import re, sqlite3, sys
 snap, listing = sys.argv[1], sys.argv[2]
-key = re.compile(r"\b[0-9a-f]{64}(?:\.thumb)?\.[a-z0-9]{2,5}\b")
+# Content-hash names (sha256, and .thumb), plus the uuid names images got before content addressing
+# (Gandalf before b213b4d; still referenced by older assets and library items).
+key = re.compile(r"\b(?:[0-9a-f]{64}(?:\.thumb)?|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.[a-z0-9]{2,5}\b")
 db = sqlite3.connect("file:%s?mode=ro" % snap, uri=True)
 names = set()
 try:
