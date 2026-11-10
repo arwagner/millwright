@@ -142,7 +142,13 @@ mv -n "$STAGE/$MAN" "$DEST/$MAN"
 if [ -e "$STAGE/$MAN" ]; then echo "gandalf backup: could not publish $MAN (snapshot left without its manifest)" >&2; exit 1; fi
 
 # 7: keep the newest KEEP_ON_BOX snapshots on the box (names validated before any rm)
-OLD=$(box docker exec "$CONTAINER" ls -1 /data/backups | grep -E "$NAME_RE" | sort -r | tail -n +"$((KEEP_ON_BOX + 1))" || true)
+# The pair is already published, so a failed listing only skips this night's pruning, and says so.
+OLD=""
+if LISTED=$(box docker exec "$CONTAINER" ls -1 /data/backups); then
+  OLD=$(printf '%s\n' "$LISTED" | grep -E "$NAME_RE" | sort -r | tail -n +"$((KEEP_ON_BOX + 1))" || true)
+else
+  echo "gandalf backup: WARNING: could not list the box's snapshots; nothing pruned this time" >&2
+fi
 for old in $OLD; do
   [[ "$old" =~ $NAME_RE ]] || continue
   box docker exec "$CONTAINER" rm -f "/data/backups/$old" "/data/backups/$old.manifest.json"
