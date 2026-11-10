@@ -284,6 +284,7 @@ The cutover (about 10 minutes; Players and GM off):
 1. Mac, in the Gandalf repo: `docker compose stop app`.
 2. Mac: the final snapshot. Its name must be exactly `gandalf-YYYYMMDD-HHMMSSZ.db` (UTC), or restore refuses it:
    `N=gandalf-$(date -u +%Y%m%d-%H%M%SZ).db`
+   `docker run --rm -v gandalf_gandalf-data:/data gandalf-cutover:$C mkdir -p /data/backups`
    `docker run --rm -v gandalf_gandalf-data:/data gandalf-cutover:$C node src/server/cli.ts backup /data/backups/$N`
    then copy the pair out:
    `docker run --rm -v gandalf_gandalf-data:/d:ro gandalf-cutover:$C cat /d/backups/$N > ~/Dropbox/andrew/secrets/millwright/backup/gandalf/$N`
@@ -300,7 +301,7 @@ The cutover (about 10 minutes; Players and GM off):
 
 On the box: `docker compose stop gandalf`, then keep a record of everything written there (the service is
 stopped, so the nightly script can't do it):
-`docker compose run --rm --no-deps -T gandalf node src/server/cli.ts backup /data/backups/gandalf-<UTC stamp>.db`.
+`docker compose run --rm --no-deps -T gandalf sh -c 'mkdir -p /data/backups && node src/server/cli.ts backup "$1"' sh /data/backups/gandalf-<UTC stamp>.db`.
 Start the Mac: `docker compose start app` in the Gandalf repo. What that gives you, plainly:
 - **Only on the Mac:** the Mac stack listens on 127.0.0.1 only. Remote Players lose access, and
   https://gandalf.vawagners.cloud answers 502 (Caddy's target is stopped).
