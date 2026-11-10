@@ -74,7 +74,9 @@ echo "gandalf restore: image files sent ($ASSETS → $ASSETS_DIR)"
 
 # 2b: every image file the snapshot names is ON THE BOX (not only at home), before anything switches
 LISTING=$(mktemp); trap 'rm -f "$LISTING"' EXIT
-box find "$ASSETS_DIR" -maxdepth 1 -type f -size +0c -printf '%f\n' > "$LISTING"
+# Full paths, basenames taken here: the arguments pass through the box's shell, which would turn a
+# `-printf '%f\n'` into `%fn` and run every name together.
+box find "$ASSETS_DIR" -maxdepth 1 -type f -size +0c > "$LISTING"
 python3 - "$SNAP_PATH" "$LISTING" <<'PY'
 import re, sqlite3, sys
 snap, listing = sys.argv[1], sys.argv[2]
@@ -89,7 +91,7 @@ try:
                 names.update(key.findall(v))
 finally:
     db.close()
-on_box = set(open(listing).read().split())
+on_box = {line.rsplit("/", 1)[-1] for line in open(listing).read().split()}
 missing = sorted(names - on_box)
 if missing:
     sys.exit("gandalf restore: %d image file(s) the snapshot names are not on the box, e.g. %s; nothing was switched" % (len(missing), ", ".join(missing[:5])))
