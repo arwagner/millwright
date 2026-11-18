@@ -129,7 +129,7 @@ Names, for the grep in `scripts/verify.sh`:
 | litellm.env | `LITELLM_MASTER_KEY` | litellm, if ever resurrected (rotate: the old key is burned) |
 | hostinger-api-token | `HOSTINGER_API_TOKEN` | rebuild.sh |
 | practice-auth.env | `PRACTICE_AUTH_USER`, `PRACTICE_AUTH_HASH` (bcrypt, single-quoted), `PRACTICE_SESSION_SECRET` (64 hex, the sign-in cookie) | caddy, for practice.vawagners.cloud |
-| aint-farm.env | `GITHUB_APP_ID`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_PRIVATE_KEY_PATH` (`/run/secrets/github-app.pem`), `FACTORY_SECRET_KEY` (32 bytes base64; seals what `factory.db` stores) | aint-farm |
+| aint-farm.env | `GITHUB_APP_ID`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_PRIVATE_KEY_PATH` (`/run/secrets/github-app.pem`), `FACTORY_SECRET_KEY` (32 bytes base64; seals what `factory.db` stores, signs run-page login cookies), `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (the App's OAuth client, for run-page login), `FACTORY_URL` (`https://factory.vawagners.cloud`) | aint-farm |
 | aint-farm-github-app.pem | the GitHub App's private key (a file, mounted read-only at `/run/secrets/github-app.pem`; owned by uid 1000, mode 400, so the container's `node` user can read it) | aint-farm |
 | (none) | — | gandalf: needs no secret; its accounts and the AI runner's credential hashes live in its database |
 
