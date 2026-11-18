@@ -16,13 +16,14 @@ no credentials. Secrets live in Dropbox, never here.
 | tiamat.vawagners.cloud | static, `/var/www/tiamat` (rsync'd by the Tiamat wiki's `deploy.sh`) |
 | practice.vawagners.cloud | basic auth or the sign-in cookie, then proxy to practice:8770 (piano practice app; see [Practice](#practice)) |
 | gandalf.vawagners.cloud | proxy to gandalf:3000; the app's own accounts (tabletop app; see [Gandalf](#gandalf)) |
+| factory.vawagners.cloud | proxy to aint-farm:3000 (the software factory's orchestrator; see [Aint-farm](#aint-farm)) |
 
 ## Layout
 
 ```
 terraform/        DNS records, SSH key, post-install script (NEVER the VPS subscription)
-bootstrap.sh      blank box -> Compose host (docker, ufw, sshd hardening, clone)
-compose.yaml      caddy, todo, myron-api, myron-bot, practice, practice-convert, gandalf; litellm commented out
+bootstrap.sh      blank box -> Compose host (4 GB swap, docker, ufw, sshd hardening, clone)
+compose.yaml      caddy, todo, myron-api, myron-bot, practice, practice-convert, gandalf, aint-farm; litellm commented out
 caddy/Caddyfile   TLS (ACME), static sites, reverse proxies
 caddy/practice-signin/  the practice sign-in page (chg-004), mounted into caddy
 sites/            vawagners + fiddlesticks static content (tiamat lives in its own repo)
@@ -47,6 +48,8 @@ spec/             spec-flow workspace (specs, plans, gates)
    MusicXML sidecars).
    Deliver Gandalf without starting it, in the Gandalf repo:
    `deploy/deploy.sh --host root@187.124.159.132 --rev <reviewed commit> --no-start`.
+   Deliver aint-farm (it starts; a fresh one holds no data yet), in the aint-farm repo:
+   `deploy/deploy.sh --host root@187.124.159.132 --tag <current release tag>`.
 6. Copy secret env files from `~/Dropbox/andrew/secrets/millwright/` to `/srv/secrets/` (this includes
    `practice-auth.env`; caddy refuses to start without it), then
    `chmod 700 /srv/secrets && chmod 600 /srv/secrets/*.env`.
@@ -61,7 +64,7 @@ spec/             spec-flow workspace (specs, plans, gates)
 8. `cd /srv/millwright && docker compose up -d --build` (this also builds practice-convert, which downloads
    the pinned MuseScore AppImage from GitHub).
 9. Check each hostname over HTTPS (practice: 401 without credentials, whose body links `/signin`; `/signin` 200; the app with them; gandalf: the sign-in page, then sign in
-   and re-pair the AI runner, see [Gandalf](#gandalf)); on the box,
+   and re-pair the AI runner, see [Gandalf](#gandalf); factory: `/health` answers 200); on the box,
    `ps axww | grep TODO_TOKEN` must find nothing and `pm2`/`nginx`/`ollama` must not exist.
 
 ## Nightly backup
@@ -310,3 +313,48 @@ Start the Mac: `docker compose start app` in the Gandalf repo. What that gives y
   until Gandalf runs on the box again or chg-006 is reverted. That is deliberate: it must not pass silently.
 - **Anything written on the box** after the cutover is NOT on the Mac. It stays in that record and is merged
   by hand, if at all.
+
+## Aint-farm
+
+The software factory's orchestrator (code in the aint-farm repo; delivered by its `deploy/deploy.sh`).
+GitHub App webhooks arrive at https://factory.vawagners.cloud.
+
+- **Network**: the default network, because it calls GitHub's API. No host port.
+- **Data**: the `aint-farm-data` volume holds `factory.db` (SQLite, WAL). It is **not backed up** nightly
+  yet: today it holds only the installation allowlist. Add it to `backup.sh` before it holds anything that
+  can't be recreated (agent credentials, aint-farm #3).
+- **No secret yet**: the GitHub App key, agent credentials and project secrets arrive with later aint-farm
+  tickets, stored encrypted in `factory.db`.
+- **Memory**: 512 MB, half a CPU. Agent runs will get their own capped containers (aint-farm #5), which
+  needs the Docker socket: a later change here.
+- **Admin**: `ssh root@187.124.159.132 docker exec aint-farm factory <command>` (`factory help` lists them).
+
+### Delivery and rollback
+
+Only tagged releases are deployed. In the aint-farm repo, after tagging and pushing:
+
+```
+deploy/deploy.sh --host root@187.124.159.132 --tag v0.1.0
+```
+
+It unpacks `git archive <tag>` into `/opt/aint-farm/releases/<tag>`, takes an online snapshot of
+`factory.db` (`factory backup`, into `/data/backups/`), points `/opt/aint-farm/app` at the release, logs it in
+`/opt/aint-farm/deploys.log`, then `docker compose up -d --build aint-farm` and waits for `/health`.
+
+Rollback undoes the last deploy, one step only:
+
+```
+deploy/deploy.sh --host root@187.124.159.132 --rollback
+```
+
+It stops the service, puts the snapshot taken before that deploy back as `factory.db` (the replaced one is
+kept beside it as `factory.db.rolled-back-<UTC>`), points `app` at the previous release and starts it.
+Anything written since that deploy is in the kept file, not the live database.
+`deploy/rehearse.sh` in the aint-farm repo runs deploy, deploy and rollback against local Docker.
+
+## Swap (chg-007)
+
+`bootstrap.sh` makes a 4 GB `/swapfile` (once, and in `/etc/fstab`). Every capped container sets
+`memswap_limit` equal to `mem_limit`, so none of them swaps; the swap is for the uncapped services and the
+box itself, so a burst slows down instead of being killed. On the live box, apply it once by running
+`bootstrap.sh` again over SSH (it is idempotent), or the swap block alone.

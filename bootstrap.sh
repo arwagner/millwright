@@ -29,6 +29,14 @@ ufw allow 80/tcp
 ufw allow 443/tcp
 ufw --force enable
 
+# --- Swap: 4 GB, so a burst (an aint-farm agent run beside a Gandalf import) slows down instead of
+# being killed. Capped containers set memswap_limit = mem_limit and never use it (chg-007).
+if ! swapon --show=NAME --noheadings | grep -qx /swapfile; then
+  [ -f /swapfile ] || { fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile; }
+  swapon /swapfile
+fi
+grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
 # --- Docker Engine + Compose plugin ----------------------------------------
 if ! command -v docker >/dev/null 2>&1; then
   install -m 0755 -d /etc/apt/keyrings

@@ -1,0 +1,16 @@
+Mainline patch for spec/product-global.md (od-5). Apply on main, not on this branch.
+
+--- a/spec/product-global.md
++++ b/spec/product-global.md
+@@ Product invariants
+-  exploring-elan, fiddlesticks, tiamat (chg-002), practice (chg-003) and gandalf (chg-006), plus www (currently a
++  exploring-elan, fiddlesticks, tiamat (chg-002), practice (chg-003), gandalf (chg-006) and factory (chg-007), plus www (currently a
+@@
+-  (proxy to gandalf:3000 on an internal-only network; the app's own accounts; chg-006).
++  (proxy to gandalf:3000 on an internal-only network; the app's own accounts; chg-006),
++  factory.vawagners.cloud (proxy to aint-farm:3000; GitHub App webhooks verified by the app; chg-007).
+@@ Cross-cutting constraints
+-- Box hardware: 2 cores, 7.8 GB RAM, 96 GB disk, no swap. Nothing scheduled on the box may assume
+-  more.
++- Box hardware: 2 cores, 7.8 GB RAM, 96 GB disk, 4 GB swap (chg-007) that no capped container may use
++  (memswap_limit = mem_limit). Nothing scheduled on the box may assume more.

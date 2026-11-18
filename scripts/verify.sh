@@ -19,12 +19,12 @@ check feat-001/AC-1 "provider pinned = 0.1.22"      grep -q 'version = "= 0.1.22
 check feat-001/AC-1 "no hostinger_vps resource"     bash -c '! grep -q "resource \"hostinger_vps\"" terraform/*.tf'
 check feat-001/AC-1 "ssh key ref ends in .pub"      bash -c 'grep -q "file(\"~/.ssh/id_ed25519.pub\")" terraform/ssh.tf && ! grep -E "file\(.*id_ed25519\"\)" terraform/ssh.tf'
 
-# ---- feat-001/AC-2: exactly the eight records (chg-002 tiamat, chg-003 practice, chg-006 gandalf), all -> the box IP
-check feat-001/AC-2 "exactly 8 dns records"         bash -c '[ "$(grep -c "resource \"hostinger_dns_record\"" terraform/dns.tf)" = 8 ]'
-for n in '"@"' '"www"' '"todo"' '"exploring-elan"' '"fiddlesticks"' '"tiamat"' '"practice"' '"gandalf"'; do
+# ---- feat-001/AC-2: exactly the nine records (chg-002 tiamat, chg-003 practice, chg-006 gandalf, chg-007 factory), all -> the box IP
+check feat-001/AC-2 "exactly 9 dns records"         bash -c '[ "$(grep -c "resource \"hostinger_dns_record\"" terraform/dns.tf)" = 9 ]'
+for n in '"@"' '"www"' '"todo"' '"exploring-elan"' '"fiddlesticks"' '"tiamat"' '"practice"' '"gandalf"' '"factory"'; do
   check feat-001/AC-2 "record name $n"              grep -q "name  = $n" terraform/dns.tf
 done
-check feat-001/AC-2 "all records -> 187.124.159.132" bash -c '[ "$(grep -c "value = local.ip" terraform/dns.tf)" = 8 ] && grep -q "ip   = \"187.124.159.132\"" terraform/dns.tf'
+check feat-001/AC-2 "all records -> 187.124.159.132" bash -c '[ "$(grep -c "value = local.ip" terraform/dns.tf)" = 9 ] && grep -q "ip   = \"187.124.159.132\"" terraform/dns.tf'
 
 # ---- feat-001/AC-3: bootstrap syntax + docker, ufw, keys, clone, sshd
 check feat-001/AC-3 "bash -n bootstrap.sh"          bash -n bootstrap.sh
@@ -44,7 +44,7 @@ check feat-001/AC-4 "compose config valid"          test -n "$CJSON"
 check feat-001/AC-4 "services + restart + ports only on caddy" bash -c "echo \"\$1\" | python3 -c '
 import json,sys
 s=json.load(sys.stdin)[\"services\"]
-assert set(s) == {\"caddy\",\"todo\",\"myron-api\",\"myron-bot\",\"practice\",\"practice-convert\",\"gandalf\"}, set(s)
+assert set(s) == {\"caddy\",\"todo\",\"myron-api\",\"myron-bot\",\"practice\",\"practice-convert\",\"gandalf\",\"aint-farm\"}, set(s)
 assert all(v.get(\"restart\")==\"unless-stopped\" for v in s.values())
 assert [k for k,v in s.items() if v.get(\"ports\")] == [\"caddy\"]
 '" _ "$CJSON"
@@ -71,7 +71,7 @@ assert \"myron-auth\" in json.load(sys.stdin).get(\"volumes\",{})
 
 # ---- feat-001/AC-5: caddyfile valid, five hostnames + www redirect
 check feat-001/AC-5 "caddy validate"                docker run --rm -v "$PWD/caddy/Caddyfile":/etc/caddy/Caddyfile:ro caddy:2 caddy validate --config /etc/caddy/Caddyfile
-for h in vawagners.cloud todo.vawagners.cloud exploring-elan.vawagners.cloud fiddlesticks.vawagners.cloud tiamat.vawagners.cloud practice.vawagners.cloud gandalf.vawagners.cloud; do
+for h in vawagners.cloud todo.vawagners.cloud exploring-elan.vawagners.cloud fiddlesticks.vawagners.cloud tiamat.vawagners.cloud practice.vawagners.cloud gandalf.vawagners.cloud factory.vawagners.cloud; do
   check feat-001/AC-5 "site $h"                     grep -q "^$h" caddy/Caddyfile
 done
 check feat-001/AC-5 "www redirects to apex"         bash -c 'grep -A1 "^www.vawagners.cloud" caddy/Caddyfile | grep -q "redir https://vawagners.cloud"'
@@ -177,6 +177,36 @@ check feat-001/AC-21 "restore: fails closed on the running check; one box-side s
 
 # ---- feat-001/AC-22 (chg-006): README covers Gandalf delivery, backup, cutover, re-pair, rollback
 check feat-001/AC-22 "README gandalf section" bash -c 'grep -q "^## Gandalf" README.md && grep -q "up --no-start gandalf" README.md && grep -q "gandalf-restore.sh --assets-only" README.md && grep -q -- "--origin https://gandalf.vawagners.cloud" README.md && grep -q "^### Rollback (back to the Mac)" README.md'
+
+# ---- feat-001/AC-23 (chg-007): aint-farm service — default network (it calls GitHub), one volume, no secret yet, capped
+check feat-001/AC-23 "aint-farm service shape" bash -c "echo \"\$1\" | python3 -c '
+import json,sys
+c=json.load(sys.stdin); a=c[\"services\"][\"aint-farm\"]
+assert a.get(\"container_name\")==\"aint-farm\" and a.get(\"restart\")==\"unless-stopped\" and a.get(\"init\") is True
+assert a[\"build\"][\"context\"]==\"/opt/aint-farm/app\" and not a[\"build\"].get(\"dockerfile_inline\")
+assert not a.get(\"ports\"), a.get(\"ports\")
+assert list(a.get(\"networks\") or {\"default\":None})==[\"default\"], a.get(\"networks\")
+assert not a.get(\"env_file\") and not a.get(\"environment\"), \"aint-farm has no secret or setting yet\"
+v=a[\"volumes\"]
+assert len(v)==1 and v[0][\"type\"]==\"volume\" and v[0][\"source\"]==\"aint-farm-data\" and v[0][\"target\"]==\"/data\", v
+assert not any(\"docker.sock\" in str(x.get(\"source\",\"\")) for x in v), \"no Docker socket until aint-farm #5\"
+assert int(a[\"mem_limit\"])==512*2**20 and int(a[\"memswap_limit\"])==int(a[\"mem_limit\"]) and float(a[\"cpus\"])==0.5
+assert \"aint-farm-data\" in c[\"volumes\"]
+'" _ "$CJSON"
+
+# ---- feat-001/AC-24 (chg-007): factory site — HSTS, one plain proxy, no auth, no header rewriting
+check feat-001/AC-24 "factory block" bash -c 'b=$(sed -n "/^factory.vawagners.cloud {/,/^}/p" caddy/Caddyfile); grep -q "Strict-Transport-Security \"max-age=31536000\"" <<<"$b" && grep -q "reverse_proxy aint-farm:3000" <<<"$b" && [ "$(grep -c reverse_proxy <<<"$b")" = 1 ] && ! grep -qE "basic_auth|header_up|trusted_proxies" <<<"$b"'
+
+# ---- feat-001/AC-25 (chg-007): a 4 GB swapfile, idempotent and in fstab; no capped container may swap
+check feat-001/AC-25 "bootstrap makes a 4 GB swapfile once" bash -c 'grep -q "fallocate -l 4G /swapfile" bootstrap.sh && grep -q "swapon --show=NAME --noheadings | grep -qx /swapfile" bootstrap.sh && grep -q "/swapfile none swap sw 0 0" bootstrap.sh'
+check feat-001/AC-25 "every mem_limit has an equal memswap_limit" bash -c "echo \"\$1\" | python3 -c '
+import json,sys
+for k,v in json.load(sys.stdin)[\"services\"].items():
+    if v.get(\"mem_limit\"): assert int(v.get(\"memswap_limit\",0))==int(v[\"mem_limit\"]), k
+'" _ "$CJSON"
+
+# ---- feat-001/AC-26 (chg-007): README covers aint-farm delivery, rollback, admin CLI and the backup gap
+check feat-001/AC-26 "README aint-farm section" bash -c 'grep -q "^## Aint-farm" README.md && grep -q "deploy/deploy.sh --host root@187.124.159.132 --tag" README.md && grep -q -- "--rollback" README.md && grep -q "docker exec aint-farm factory" README.md && grep -q "not backed up" README.md'
 
 # ---- feat-001/AC-14 (chg-003): practice site behind basic auth; credentials only from /srv/secrets
 check feat-001/AC-14 "caddy reads practice-auth.env (required)" bash -c "echo \"\$1\" | python3 -c '
