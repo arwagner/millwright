@@ -272,13 +272,21 @@ services:
     restart: unless-stopped
     init: true
     env_file:
-      - /srv/secrets/aint-farm.env # GITHUB_APP_ID, GITHUB_WEBHOOK_SECRET, GITHUB_PRIVATE_KEY_PATH
+      - /srv/secrets/aint-farm.env # GITHUB_APP_ID, GITHUB_WEBHOOK_SECRET, GITHUB_PRIVATE_KEY_PATH, FACTORY_SECRET_KEY
     volumes:
       - aint-farm-data:/data
       - /srv/secrets/aint-farm-github-app.pem:/run/secrets/github-app.pem:ro
+      # chg-009: the host's Docker socket, to start each agent run in its own capped `docker run --rm`
+      # container (1 CPU / 2.5 GB, at most 2 at once, no mounts). Root-equivalent: an accepted risk in
+      # aint-farm's design, to revisit before it serves anyone else.
+      - /var/run/docker.sock:/var/run/docker.sock
+    # chg-009: the host's docker group (gid 988 on this box; check `getent group docker` after a rebuild),
+    # so the container's node user can use the socket without running as root.
+    group_add:
+      - "988"
     expose:
       - "3000"
-    # The orchestrator itself is small; agent runs will get their own capped containers (aint-farm #5).
+    # The orchestrator itself is small; agent runs get their own capped containers (chg-009).
     mem_limit: 512m
     memswap_limit: 512m
     cpus: 0.5
@@ -329,5 +337,5 @@ volumes:
   # chg-006: Gandalf's database and image files. Backed up nightly through the app plus an additive
   # copy of new image files (scripts/gandalf-backup.sh).
   gandalf-data:
-  # chg-007: aint-farm's database (factory.db). Not in the nightly backup yet (see README, Aint-farm).
+  # chg-007: aint-farm's database (factory.db). Backed up nightly through the app (chg-009, backup.sh step 6).
   aint-farm-data:

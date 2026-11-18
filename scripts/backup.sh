@@ -10,8 +10,10 @@
 # 5. (chg-006) Gandalf: the app's own online snapshot, verified again at home, plus
 #    new image files copied additively (scripts/gandalf-backup.sh). It skips with a
 #    message while Gandalf holds no data on the box.
-# Steps 4 and 5 run in that order after todo and caddy have landed, and both always
-# run: either failing exits non-zero, and a failed step publishes nothing.
+# 6. (chg-009) aint-farm: the app's online snapshot of factory.db, checked at home
+#    (scripts/aint-farm-backup.sh). Its secrets in it are sealed; the key is in aint-farm.env.
+# Steps 4 to 6 run in that order after todo and caddy have landed, and all always
+# run: any failing exits non-zero, and a failed step publishes nothing.
 #
 # Prototype failure mode: if the laptop is asleep or the box is down, tonight's
 # run silently skips — no retry, no alert (spec sharp edge). Dropbox holds
@@ -41,4 +43,5 @@ echo "backup ok: $DEST/todo-$STAMP.db + caddy-data-$STAMP.tgz"
 rc=0
 "$(dirname "$0")/practice-backup.sh" "$DEST/practice" || rc=1
 "$(dirname "$0")/gandalf-backup.sh" "$DEST/gandalf" || rc=1
+"$(dirname "$0")/aint-farm-backup.sh" "$DEST/aint-farm" || rc=1
 exit $rc

@@ -39,7 +39,9 @@ nightly backup.
   CNAME to the apex). The panel's two
   extra records, n8n and llm, point at the box with nothing behind them — Andrew approved dropping
   both at the DNS adoption, so they are deleted and not recreated.
-- Docker Compose is the only process manager on the box — no systemd app units, no PM2.
+- Docker Compose is the only process manager on the box — no systemd app units, no PM2. The one
+  exception is jobs, not services: aint-farm's agent runs, each a `docker run --rm` container it starts
+  through the Docker socket and removes when the run ends (chg-009).
 - Each hostname serves exactly its assigned target: vawagners.cloud (static), todo.vawagners.cloud
   (proxy to todo:8787), exploring-elan.vawagners.cloud (static client + /api/* to myron-api:3001),
   fiddlesticks.vawagners.cloud (static), tiamat.vawagners.cloud (static, from the host path

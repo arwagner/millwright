@@ -35,7 +35,8 @@ spec/             spec-flow workspace (specs, plans, gates)
 ## Rebuild runbook
 
 1. `scripts/backup.sh` on the laptop — fresh `todo.db` snapshot + Caddy cert volume + the practice
-   app's own verified snapshot (`backup/practice/`) + Gandalf's snapshot and new image files (`backup/gandalf/`).
+   app's own verified snapshot (`backup/practice/`) + Gandalf's snapshot and new image files (`backup/gandalf/`)
+   + aint-farm's `factory.db` (`backup/aint-farm/`).
 2. `scripts/rebuild.sh` — calls the Hostinger `recreate` endpoint. Free, keeps the IP,
    **wipes the box and deletes Hostinger snapshots**. Needs `HOSTINGER_API_TOKEN`, `VM_ID`,
    `TEMPLATE_ID` (discover with `--list` / `--templates`).
@@ -128,7 +129,7 @@ Names, for the grep in `scripts/verify.sh`:
 | litellm.env | `LITELLM_MASTER_KEY` | litellm, if ever resurrected (rotate: the old key is burned) |
 | hostinger-api-token | `HOSTINGER_API_TOKEN` | rebuild.sh |
 | practice-auth.env | `PRACTICE_AUTH_USER`, `PRACTICE_AUTH_HASH` (bcrypt, single-quoted), `PRACTICE_SESSION_SECRET` (64 hex, the sign-in cookie) | caddy, for practice.vawagners.cloud |
-| aint-farm.env | `GITHUB_APP_ID`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_PRIVATE_KEY_PATH` (`/run/secrets/github-app.pem`) | aint-farm |
+| aint-farm.env | `GITHUB_APP_ID`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_PRIVATE_KEY_PATH` (`/run/secrets/github-app.pem`), `FACTORY_SECRET_KEY` (32 bytes base64; seals what `factory.db` stores) | aint-farm |
 | aint-farm-github-app.pem | the GitHub App's private key (a file, mounted read-only at `/run/secrets/github-app.pem`; owned by uid 1000, mode 400, so the container's `node` user can read it) | aint-farm |
 | (none) | — | gandalf: needs no secret; its accounts and the AI runner's credential hashes live in its database |
 
@@ -324,16 +325,22 @@ The software factory's orchestrator (code in the aint-farm repo; delivered by it
 GitHub App webhooks arrive at https://factory.vawagners.cloud.
 
 - **Network**: the default network, because it calls GitHub's API. No host port.
-- **Data**: the `aint-farm-data` volume holds `factory.db` (SQLite, WAL). It is **not backed up** nightly
-  yet: today it holds only the installation allowlist. Add it to `backup.sh` before it holds anything that
-  can't be recreated (agent credentials, aint-farm #3).
+- **Data**: the `aint-farm-data` volume holds `factory.db` (SQLite, WAL): the installation allowlist, runs,
+  and agent credentials and project secrets sealed with `FACTORY_SECRET_KEY`. Backed up nightly through the
+  app (chg-009): `scripts/aint-farm-backup.sh` asks it for an online snapshot, streams it home and checks
+  it into `backup/aint-farm/`. The key is in `aint-farm.env` in the same Dropbox folder, so the backup is
+  only as private as that folder.
 - **Secrets** (chg-008): the GitHub App's id, webhook secret and key path come from
   `/srv/secrets/aint-farm.env`; the App's private key is `/srv/secrets/aint-farm-github-app.pem`, mounted
   read-only at `/run/secrets/github-app.pem`. Both must exist before `docker compose up`: the env file is
   required, and a missing bind source turns into an empty directory. Agent credentials and project secrets
-  arrive with later aint-farm tickets, stored encrypted in `factory.db`.
-- **Memory**: 512 MB, half a CPU. Agent runs will get their own capped containers (aint-farm #5), which
-  needs the Docker socket: a later change here.
+  are stored encrypted in `factory.db`, under `FACTORY_SECRET_KEY` (chg-009) from the same env file.
+- **Runs** (chg-009): each agent run is its own `docker run --rm` container, started through the host's
+  Docker socket (mounted into aint-farm, with the docker group, gid 988): 1 CPU / 2.5 GB each, at most 2 at
+  once, nothing mounted, labelled `aint-farm.run`. They are jobs, not services: Compose doesn't manage them,
+  and aint-farm removes any left over when it starts. The socket is root-equivalent, an accepted risk in
+  aint-farm's design.
+- **Memory**: the orchestrator 512 MB, half a CPU; runs as above.
 - **Admin**: `ssh root@187.124.159.132 docker exec aint-farm factory <command>` (`factory help` lists them).
 
 ### Delivery and rollback

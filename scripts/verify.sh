@@ -178,8 +178,8 @@ check feat-001/AC-21 "restore: fails closed on the running check; one box-side s
 # ---- feat-001/AC-22 (chg-006): README covers Gandalf delivery, backup, cutover, re-pair, rollback
 check feat-001/AC-22 "README gandalf section" bash -c 'grep -q "^## Gandalf" README.md && grep -q "up --no-start gandalf" README.md && grep -q "gandalf-restore.sh --assets-only" README.md && grep -q -- "--origin https://gandalf.vawagners.cloud" README.md && grep -q "^### Rollback (back to the Mac)" README.md'
 
-# ---- feat-001/AC-23 (chg-007, chg-008): aint-farm service — default network (it calls GitHub), one volume,
-# its GitHub App secrets from /srv/secrets only (env file + read-only key mount), capped
+# ---- feat-001/AC-23 (chg-007, chg-008, chg-009): aint-farm service — default network (it calls GitHub), one volume,
+# its secrets from /srv/secrets only (env file + read-only key mount), the Docker socket with the docker group, capped
 check feat-001/AC-23 "aint-farm service shape" bash -c "echo \"\$1\" | python3 -c '
 import json,sys
 c=json.load(sys.stdin); a=c[\"services\"][\"aint-farm\"]
@@ -191,10 +191,13 @@ ef=a.get(\"env_file\") or []
 assert len(ef)==1 and ef[0][\"path\"]==\"/srv/secrets/aint-farm.env\" and ef[0].get(\"required\",True) is not False, ef
 assert not a.get(\"environment\"), \"aint-farm settings come only from its env file\"
 v=a[\"volumes\"]
-assert len(v)==2, v
+assert len(v)==3, v
 assert v[0][\"type\"]==\"volume\" and v[0][\"source\"]==\"aint-farm-data\" and v[0][\"target\"]==\"/data\", v
 assert v[1][\"type\"]==\"bind\" and v[1][\"source\"]==\"/srv/secrets/aint-farm-github-app.pem\" and v[1][\"target\"]==\"/run/secrets/github-app.pem\" and v[1].get(\"read_only\") is True, v
-assert not any(\"docker.sock\" in str(x.get(\"source\",\"\")) for x in v), \"no Docker socket until aint-farm #5\"
+assert v[2][\"type\"]==\"bind\" and v[2][\"source\"]==\"/var/run/docker.sock\" and v[2][\"target\"]==\"/var/run/docker.sock\", v
+assert [str(g) for g in a.get(\"group_add\",[])]==[\"988\"], a.get(\"group_add\")
+for k,o in c[\"services\"].items():
+    if k!=\"aint-farm\": assert not any(\"docker.sock\" in str(x.get(\"source\",\"\")) for x in o.get(\"volumes\",[]) if isinstance(x,dict)), k
 assert int(a[\"mem_limit\"])==512*2**20 and int(a[\"memswap_limit\"])==int(a[\"mem_limit\"]) and float(a[\"cpus\"])==0.5
 assert \"aint-farm-data\" in c[\"volumes\"]
 '" _ "$CJSON_REFS"
@@ -211,7 +214,12 @@ for k,v in json.load(sys.stdin)[\"services\"].items():
 '" _ "$CJSON"
 
 # ---- feat-001/AC-26 (chg-007): README covers aint-farm delivery, rollback, admin CLI and the backup gap
-check feat-001/AC-26 "README aint-farm section" bash -c 'grep -q "^## Aint-farm" README.md && grep -q "deploy/deploy.sh --host root@187.124.159.132 --tag" README.md && grep -q -- "--rollback" README.md && grep -q "docker exec aint-farm factory" README.md && grep -q "not backed up" README.md'
+check feat-001/AC-26 "README aint-farm section" bash -c 'grep -q "^## Aint-farm" README.md && grep -q "deploy/deploy.sh --host root@187.124.159.132 --tag" README.md && grep -q -- "--rollback" README.md && grep -q "docker exec aint-farm factory" README.md && grep -q "aint-farm-backup" README.md'
+
+# ---- feat-001/AC-27 (chg-009): aint-farm's database backed up nightly through the app, never the live file
+check feat-001/AC-27 "aint-farm backup script" bash -c 'bash -n scripts/aint-farm-backup.sh && test -x scripts/aint-farm-backup.sh && grep -q "docker exec aint-farm sh -c .*factory backup" scripts/aint-farm-backup.sh && grep -q "PRAGMA integrity_check" scripts/aint-farm-backup.sh && ! grep -E "^[^#]*(cat|cp|rsync)[^#]*/data/factory\.db" scripts/aint-farm-backup.sh | grep .'
+check feat-001/AC-27 "backup.sh runs it after gandalf, always" bash -c 'g=$(grep -n "gandalf-backup.sh\" \"\$DEST/gandalf\" || rc=1" scripts/backup.sh | cut -d: -f1); a=$(grep -n "aint-farm-backup.sh\" \"\$DEST/aint-farm\" || rc=1" scripts/backup.sh | cut -d: -f1); [ -n "$g" ] && [ -n "$a" ] && [ "$g" -lt "$a" ]'
+check feat-001/AC-8 "no aint-farm data tracked" bash -c '! git ls-files | grep -E "(^|/)factory[^/]*\.db$|\.pem$" | grep .'
 
 # ---- feat-001/AC-14 (chg-003): practice site behind basic auth; credentials only from /srv/secrets
 check feat-001/AC-14 "caddy reads practice-auth.env (required)" bash -c "echo \"\$1\" | python3 -c '
