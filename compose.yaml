@@ -189,13 +189,15 @@ services:
       - practice
     expose:
       - "8770"
-    # Box: 2 cores, 7.8 GB, no swap. The app is small; keep it from crowding the others.
+    # Box: 2 cores, 7.8 GB, swap off limits (memswap_limit). The app is small; keep it from crowding
+    # the others.
     mem_limit: 768m
+    memswap_limit: 768m
     cpus: 1.0
 
   # chg-005: MuseScore 4.6.5 converting uploaded .mscz to MusicXML (practice repo convert/, delivered with
   # the app by deploy/deploy.sh). It parses files from the internet, so it is boxed in: no network at all,
-  # a read-only root, a non-root user, no capabilities, 1.5 GB with no swap (the box has none), 1 CPU,
+  # a read-only root, a non-root user, no capabilities, 1.5 GB with no swap (memswap_limit), 1 CPU,
   # 64 processes, 120 s per batch (inside). It sees only the spool: jobs read-only, answers writable. No
   # database, practice home, scores or secrets.
   practice-convert:
@@ -249,10 +251,33 @@ services:
       - gandalf
     expose:
       - "3000"
-    # Box: 2 cores, 7.8 GB, no swap. Room for one large import; keep it from crowding the others.
+    # Box: 2 cores, 7.8 GB, swap off limits (memswap_limit). Room for one large import; keep it from
+    # crowding the others.
     mem_limit: 2560m
     memswap_limit: 2560m
     cpus: 1.0
+
+  # chg-007: aint-farm, the software factory's orchestrator, at factory.vawagners.cloud. GitHub sends
+  # its webhooks here, so it needs a route out (GitHub's API): it sits on the default network, as todo
+  # does. Code arrives as a `git archive` of a release tag in /opt/aint-farm/app (aint-farm's
+  # deploy/deploy.sh); the image builds from that tree's own Dockerfile (base pinned there by digest).
+  # It owns factory.db (SQLite, WAL) in its volume. No secret yet: the GitHub App key, agent credentials
+  # and project secrets arrive with later aint-farm tickets (stored encrypted in factory.db).
+  aint-farm:
+    # Stable name: aint-farm's deploy.sh and the admin CLI, `docker exec aint-farm factory …`.
+    container_name: aint-farm
+    build:
+      context: /opt/aint-farm/app
+    restart: unless-stopped
+    init: true
+    volumes:
+      - aint-farm-data:/data
+    expose:
+      - "3000"
+    # The orchestrator itself is small; agent runs will get their own capped containers (aint-farm #5).
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 0.5
 
   # litellm — retired to cold storage (decision 10). Config kept in litellm/.
   # Uncomment to resurrect; master key comes from /srv/secrets/litellm.env.
@@ -300,3 +325,5 @@ volumes:
   # chg-006: Gandalf's database and image files. Backed up nightly through the app plus an additive
   # copy of new image files (scripts/gandalf-backup.sh).
   gandalf-data:
+  # chg-007: aint-farm's database (factory.db). Not in the nightly backup yet (see README, Aint-farm).
+  aint-farm-data:

@@ -74,3 +74,12 @@ resource "hostinger_dns_record" "gandalf" {
   value = local.ip
   ttl   = 300
 }
+
+resource "hostinger_dns_record" "factory" {
+  # chg-007: aint-farm, the software factory's orchestrator (proxied to the aint-farm container).
+  zone  = local.zone
+  name  = "factory"
+  type  = "A"
+  value = local.ip
+  ttl   = 300
+}

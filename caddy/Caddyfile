@@ -145,3 +145,15 @@ gandalf.vawagners.cloud {
 	encode zstd gzip
 	reverse_proxy gandalf:3000
 }
+
+# chg-007: aint-farm, the software factory's orchestrator. GitHub App webhooks arrive here (verified by
+# signature in the app); run pages will sit behind GitHub login in the app (aint-farm #7). Caddy adds TLS
+# and HSTS only.
+factory.vawagners.cloud {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	encode zstd gzip
+	reverse_proxy aint-farm:3000
+}
