@@ -35,7 +35,7 @@ check feat-001/AC-3 "credential-free https clone"   bash -c 'grep -q "https://gi
 check feat-001/AC-3 "PasswordAuthentication no"     grep -q "PasswordAuthentication no" bootstrap.sh
 
 # ---- feat-001/AC-4: compose valid, four services + restart, ports only on caddy
-S=$(mktemp -d); touch "$S/todo.env" "$S/myron-api.env" "$S/myron-bot.env" "$S/practice-auth.env"
+S=$(mktemp -d); touch "$S/todo.env" "$S/myron-api.env" "$S/myron-bot.env" "$S/practice-auth.env" "$S/aint-farm.env"
 CJSON=$(docker run --rm -v "$PWD":/w -w /w -v "$S":/srv/secrets docker:cli docker compose config --format json 2>/dev/null)
 # The same, with env files left as references (the resolved form merges them into environment).
 CJSON_REFS=$(docker run --rm -v "$PWD":/w -w /w -v "$S":/srv/secrets docker:cli docker compose config --no-env-resolution --format json 2>/dev/null)
@@ -178,7 +178,8 @@ check feat-001/AC-21 "restore: fails closed on the running check; one box-side s
 # ---- feat-001/AC-22 (chg-006): README covers Gandalf delivery, backup, cutover, re-pair, rollback
 check feat-001/AC-22 "README gandalf section" bash -c 'grep -q "^## Gandalf" README.md && grep -q "up --no-start gandalf" README.md && grep -q "gandalf-restore.sh --assets-only" README.md && grep -q -- "--origin https://gandalf.vawagners.cloud" README.md && grep -q "^### Rollback (back to the Mac)" README.md'
 
-# ---- feat-001/AC-23 (chg-007): aint-farm service — default network (it calls GitHub), one volume, no secret yet, capped
+# ---- feat-001/AC-23 (chg-007, chg-008): aint-farm service — default network (it calls GitHub), one volume,
+# its GitHub App secrets from /srv/secrets only (env file + read-only key mount), capped
 check feat-001/AC-23 "aint-farm service shape" bash -c "echo \"\$1\" | python3 -c '
 import json,sys
 c=json.load(sys.stdin); a=c[\"services\"][\"aint-farm\"]
@@ -186,13 +187,17 @@ assert a.get(\"container_name\")==\"aint-farm\" and a.get(\"restart\")==\"unless
 assert a[\"build\"][\"context\"]==\"/opt/aint-farm/app\" and not a[\"build\"].get(\"dockerfile_inline\")
 assert not a.get(\"ports\"), a.get(\"ports\")
 assert list(a.get(\"networks\") or {\"default\":None})==[\"default\"], a.get(\"networks\")
-assert not a.get(\"env_file\") and not a.get(\"environment\"), \"aint-farm has no secret or setting yet\"
+ef=a.get(\"env_file\") or []
+assert len(ef)==1 and ef[0][\"path\"]==\"/srv/secrets/aint-farm.env\" and ef[0].get(\"required\",True) is not False, ef
+assert not a.get(\"environment\"), \"aint-farm settings come only from its env file\"
 v=a[\"volumes\"]
-assert len(v)==1 and v[0][\"type\"]==\"volume\" and v[0][\"source\"]==\"aint-farm-data\" and v[0][\"target\"]==\"/data\", v
+assert len(v)==2, v
+assert v[0][\"type\"]==\"volume\" and v[0][\"source\"]==\"aint-farm-data\" and v[0][\"target\"]==\"/data\", v
+assert v[1][\"type\"]==\"bind\" and v[1][\"source\"]==\"/srv/secrets/aint-farm-github-app.pem\" and v[1][\"target\"]==\"/run/secrets/github-app.pem\" and v[1].get(\"read_only\") is True, v
 assert not any(\"docker.sock\" in str(x.get(\"source\",\"\")) for x in v), \"no Docker socket until aint-farm #5\"
 assert int(a[\"mem_limit\"])==512*2**20 and int(a[\"memswap_limit\"])==int(a[\"mem_limit\"]) and float(a[\"cpus\"])==0.5
 assert \"aint-farm-data\" in c[\"volumes\"]
-'" _ "$CJSON"
+'" _ "$CJSON_REFS"
 
 # ---- feat-001/AC-24 (chg-007): factory site — HSTS, one plain proxy, no auth, no header rewriting
 check feat-001/AC-24 "factory block" bash -c 'b=$(sed -n "/^factory.vawagners.cloud {/,/^}/p" caddy/Caddyfile); grep -q "Strict-Transport-Security \"max-age=31536000\"" <<<"$b" && grep -q "reverse_proxy aint-farm:3000" <<<"$b" && [ "$(grep -c reverse_proxy <<<"$b")" = 1 ] && ! grep -qE "basic_auth|header_up|trusted_proxies" <<<"$b"'

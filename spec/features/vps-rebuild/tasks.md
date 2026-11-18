@@ -96,4 +96,8 @@ Glyphs: `[x]` done · `[ ]` not started · `[~]` in progress · `[-]` n/a · `[H
 - [x] T21: (chg-003 r2 repairs) restore through the app's `import-backup` (no silent reuse of a different
   same-named pair), fresh staging; `practice-rollback.sh` with data-decided authority and a pre-change record;
   practice-side guarded reads on Linux, quoted remote delivery, fresh per-attempt release staging. (AC-15)
-
+- [x] T24: (chg-008) aint-farm gains `env_file` `/srv/secrets/aint-farm.env` and a read-only mount of
+  `/srv/secrets/aint-farm-github-app.pem`; verify.sh AC-23 check; README secrets row, runbook step 6,
+  Aint-farm section. (AC-23, AC-26)
+- [H] T25: (chg-008, hs-12) Go-live, after Andrew's approval: both files on the box before the pull, then
+  `docker compose up -d aint-farm`; `docker exec aint-farm sh -c 'test -s /run/secrets/github-app.pem && test -n "$GITHUB_APP_ID"'`.

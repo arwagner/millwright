@@ -261,8 +261,9 @@ services:
   # its webhooks here, so it needs a route out (GitHub's API): it sits on the default network, as todo
   # does. Code arrives as a `git archive` of a release tag in /opt/aint-farm/app (aint-farm's
   # deploy/deploy.sh); the image builds from that tree's own Dockerfile (base pinned there by digest).
-  # It owns factory.db (SQLite, WAL) in its volume. No secret yet: the GitHub App key, agent credentials
-  # and project secrets arrive with later aint-farm tickets (stored encrypted in factory.db).
+  # It owns factory.db (SQLite, WAL) in its volume. chg-008: the GitHub App's id, webhook secret and key
+  # path come from its env file; the key itself (multi-line PEM) is a read-only file mount. Agent
+  # credentials and project secrets arrive with later aint-farm tickets, stored encrypted in factory.db.
   aint-farm:
     # Stable name: aint-farm's deploy.sh and the admin CLI, `docker exec aint-farm factory …`.
     container_name: aint-farm
@@ -270,8 +271,11 @@ services:
       context: /opt/aint-farm/app
     restart: unless-stopped
     init: true
+    env_file:
+      - /srv/secrets/aint-farm.env # GITHUB_APP_ID, GITHUB_WEBHOOK_SECRET, GITHUB_PRIVATE_KEY_PATH
     volumes:
       - aint-farm-data:/data
+      - /srv/secrets/aint-farm-github-app.pem:/run/secrets/github-app.pem:ro
     expose:
       - "3000"
     # The orchestrator itself is small; agent runs will get their own capped containers (aint-farm #5).

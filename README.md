@@ -51,8 +51,9 @@ spec/             spec-flow workspace (specs, plans, gates)
    Deliver aint-farm (it starts; a fresh one holds no data yet), in the aint-farm repo:
    `deploy/deploy.sh --host root@187.124.159.132 --tag <current release tag>`.
 6. Copy secret env files from `~/Dropbox/andrew/secrets/millwright/` to `/srv/secrets/` (this includes
-   `practice-auth.env`; caddy refuses to start without it), then
-   `chmod 700 /srv/secrets && chmod 600 /srv/secrets/*.env`.
+   `practice-auth.env`, which caddy refuses to start without, and aint-farm's `aint-farm.env` and
+   `aint-farm-github-app.pem`), then
+   `chmod 700 /srv/secrets && chmod 600 /srv/secrets/*.env /srv/secrets/*.pem`.
 7. Restore data: copy the `todo.db` snapshot into the `todo-data` volume; untar the cert backup
    into the `caddy-data` volume (skips Let's Encrypt reissue — five duplicate certs/week limit).
    Nothing restores `myron-auth` (exploring-elan's logins) — it is deliberately not backed up, so
@@ -126,6 +127,8 @@ Names, for the grep in `scripts/verify.sh`:
 | litellm.env | `LITELLM_MASTER_KEY` | litellm, if ever resurrected (rotate: the old key is burned) |
 | hostinger-api-token | `HOSTINGER_API_TOKEN` | rebuild.sh |
 | practice-auth.env | `PRACTICE_AUTH_USER`, `PRACTICE_AUTH_HASH` (bcrypt, single-quoted), `PRACTICE_SESSION_SECRET` (64 hex, the sign-in cookie) | caddy, for practice.vawagners.cloud |
+| aint-farm.env | `GITHUB_APP_ID`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_PRIVATE_KEY_PATH` (`/run/secrets/github-app.pem`) | aint-farm |
+| aint-farm-github-app.pem | the GitHub App's private key (a file, mounted read-only at `/run/secrets/github-app.pem`) | aint-farm |
 | (none) | — | gandalf: needs no secret; its accounts and the AI runner's credential hashes live in its database |
 
 ## Known risks
@@ -323,8 +326,11 @@ GitHub App webhooks arrive at https://factory.vawagners.cloud.
 - **Data**: the `aint-farm-data` volume holds `factory.db` (SQLite, WAL). It is **not backed up** nightly
   yet: today it holds only the installation allowlist. Add it to `backup.sh` before it holds anything that
   can't be recreated (agent credentials, aint-farm #3).
-- **No secret yet**: the GitHub App key, agent credentials and project secrets arrive with later aint-farm
-  tickets, stored encrypted in `factory.db`.
+- **Secrets** (chg-008): the GitHub App's id, webhook secret and key path come from
+  `/srv/secrets/aint-farm.env`; the App's private key is `/srv/secrets/aint-farm-github-app.pem`, mounted
+  read-only at `/run/secrets/github-app.pem`. Both must exist before `docker compose up`: the env file is
+  required, and a missing bind source turns into an empty directory. Agent credentials and project secrets
+  arrive with later aint-farm tickets, stored encrypted in `factory.db`.
 - **Memory**: 512 MB, half a CPU. Agent runs will get their own capped containers (aint-farm #5), which
   needs the Docker socket: a later change here.
 - **Admin**: `ssh root@187.124.159.132 docker exec aint-farm factory <command>` (`factory help` lists them).

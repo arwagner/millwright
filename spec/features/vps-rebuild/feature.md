@@ -17,7 +17,7 @@ readiness:
   plan:     ready
   tasks:    draft
 gate:
-  analyze: blocking
+  analyze: not-run
   product_global_hash: "sha256:db50bf205d8a"
   constitution_hash: "sha256:0caed037eb38"
 human_signoff:
@@ -32,6 +32,7 @@ human_signoff:
   - { id: hs-9, description: "chg-006 (c): cutover: stop Gandalf on the Mac, final snapshot, restore on the box, first start, re-pair the AI runner; rollback per README", owner: "Andrew", resolved: true, decision: "Cut over 00:16-00:18Z; Andrew signed in as GM and Player 01:28Z; first nightly 07:30Z verified. AI runner not yet re-paired (Andrew pairs it at his first AI session).", at: "2026-11-11" }
   - { id: hs-10, description: "chg-007 (a): push millwright and terraform apply the factory record", owner: "Andrew", resolved: true, at: "2026-11-18" }
   - { id: hs-11, description: "chg-007 (b): add the 4 GB swapfile on the box (bootstrap.sh's swap block), pull millwright, restart caddy (a few seconds of downtime for every site), first aint-farm deploy (deploy.sh --tag)", owner: "Andrew", resolved: true, decision: "Swap on 02:44Z; caddy restarted; v0.1.0 deployed 02:46Z; v0.1.1 deploy, rollback to v0.1.0 and redeploy proven on the box", at: "2026-11-18" }
+  - { id: hs-12, description: "chg-008 live: aint-farm.env and aint-farm-github-app.pem to Dropbox and /srv/secrets (chmod 600) FIRST, then push millwright, pull on the box, docker compose up -d aint-farm (only aint-farm is recreated)", owner: "Andrew", resolved: false }
 open_decisions:
   - { id: od-2, description: "chg-003 needs the product-global DNS/hostname/backup invariants updated on main (main-branch-only); merge the prepared mainline patch before go-live", owner: "Andrew", resolved: false }
   - { id: od-3, description: "chg-004: product-global's hostname invariant says practice is 'Caddy basic auth, then proxy to practice:8770'; on main (main-branch-only) it should read 'basic auth or the sign-in cookie'. Same target, same user and password", owner: "Andrew", resolved: false }
