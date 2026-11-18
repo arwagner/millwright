@@ -53,7 +53,8 @@ spec/             spec-flow workspace (specs, plans, gates)
 6. Copy secret env files from `~/Dropbox/andrew/secrets/millwright/` to `/srv/secrets/` (this includes
    `practice-auth.env`, which caddy refuses to start without, and aint-farm's `aint-farm.env` and
    `aint-farm-github-app.pem`), then
-   `chmod 700 /srv/secrets && chmod 600 /srv/secrets/*.env /srv/secrets/*.pem`.
+   `chmod 700 /srv/secrets && chmod 600 /srv/secrets/*.env /srv/secrets/*.pem`, and give aint-farm's key to its
+   container user: `chown 1000:1000 /srv/secrets/aint-farm-github-app.pem && chmod 400 /srv/secrets/aint-farm-github-app.pem`.
 7. Restore data: copy the `todo.db` snapshot into the `todo-data` volume; untar the cert backup
    into the `caddy-data` volume (skips Let's Encrypt reissue — five duplicate certs/week limit).
    Nothing restores `myron-auth` (exploring-elan's logins) — it is deliberately not backed up, so
@@ -128,7 +129,7 @@ Names, for the grep in `scripts/verify.sh`:
 | hostinger-api-token | `HOSTINGER_API_TOKEN` | rebuild.sh |
 | practice-auth.env | `PRACTICE_AUTH_USER`, `PRACTICE_AUTH_HASH` (bcrypt, single-quoted), `PRACTICE_SESSION_SECRET` (64 hex, the sign-in cookie) | caddy, for practice.vawagners.cloud |
 | aint-farm.env | `GITHUB_APP_ID`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_PRIVATE_KEY_PATH` (`/run/secrets/github-app.pem`) | aint-farm |
-| aint-farm-github-app.pem | the GitHub App's private key (a file, mounted read-only at `/run/secrets/github-app.pem`) | aint-farm |
+| aint-farm-github-app.pem | the GitHub App's private key (a file, mounted read-only at `/run/secrets/github-app.pem`; owned by uid 1000, mode 400, so the container's `node` user can read it) | aint-farm |
 | (none) | — | gandalf: needs no secret; its accounts and the AI runner's credential hashes live in its database |
 
 ## Known risks
