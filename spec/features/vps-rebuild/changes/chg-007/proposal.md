@@ -30,6 +30,6 @@ can't be recreated. The box gains a 4 GB swapfile; every capped container sets `
 ## Status
 - [ ] delta reviewed (analyze)
 - [x] implemented & verified offline (verify.sh green); deploy rehearsed on local Docker (aint-farm deploy/rehearse.sh)
-- [ ] mainline product-global patch reviewed and merged (od-5)
+- [x] mainline product-global patch merged (od-5)
 - [ ] folded into the feature's spec.md (after review)
-- [ ] live: hs-10 (push + DNS), hs-11 (swap, pull, restart caddy, first deploy)
+- [x] live: hs-10 (push + DNS), hs-11 (swap, pull, restart caddy, first deploy), 2026-11-18
