@@ -20,5 +20,5 @@ jobs, not services.
 
 ## Status
 - [x] implemented & verified offline (verify.sh)
-- [ ] live: hs-13
+- [x] live: hs-13
 - [ ] folded into the feature's spec.md (after review)
