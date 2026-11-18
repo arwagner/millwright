@@ -35,7 +35,7 @@ nightly backup.
 - The IP address 187.124.159.132 does not change across rebuilds.
 - Terraform owns every DNS record for vawagners.cloud; nothing else creates or edits them. The
   record set (reconciled against the Hostinger panel 2026-08-17): A records at the apex, todo,
-  exploring-elan, fiddlesticks, tiamat (chg-002), practice (chg-003) and gandalf (chg-006), plus www (currently a
+  exploring-elan, fiddlesticks, tiamat (chg-002), practice (chg-003), gandalf (chg-006) and factory (chg-007), plus www (currently a
   CNAME to the apex). The panel's two
   extra records, n8n and llm, point at the box with nothing behind them — Andrew approved dropping
   both at the DNS adoption, so they are deleted and not recreated.
@@ -45,7 +45,8 @@ nightly backup.
   fiddlesticks.vawagners.cloud (static), tiamat.vawagners.cloud (static, from the host path
   `/var/www/tiamat`, delivered by the Tiamat wiki's `deploy.sh`), practice.vawagners.cloud (Caddy
   basic auth, then proxy to practice:8770 on an internal-only network; chg-003), gandalf.vawagners.cloud
-  (proxy to gandalf:3000 on an internal-only network; the app's own accounts; chg-006).
+  (proxy to gandalf:3000 on an internal-only network; the app's own accounts; chg-006),
+  factory.vawagners.cloud (proxy to aint-farm:3000; GitHub App webhooks verified by the app; chg-007).
 - A blank box can clone millwright without any credential.
 
 ## Cross-cutting constraints
@@ -54,6 +55,6 @@ nightly backup.
   deleting them in the panel first.
 - Let's Encrypt issues at most five duplicate certificates per week — the certificate volume backup
   exists to keep rebuild tests under this limit.
-- Box hardware: 2 cores, 7.8 GB RAM, 96 GB disk, no swap. Nothing scheduled on the box may assume
-  more.
+- Box hardware: 2 cores, 7.8 GB RAM, 96 GB disk, 4 GB swap (chg-007) that no capped container may use
+  (memswap_limit = mem_limit). Nothing scheduled on the box may assume more.
 - Billing is annual; destroying the subscription forfeits prepaid months and the IP address.
