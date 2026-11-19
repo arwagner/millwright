@@ -11,3 +11,6 @@ terraform.tfstate*
 .scratchpad/
 
 # spec-flow generated files are ignored via spec/.gitignore
+
+# Fiddlesticks is rsynced here by its own deploy workflow (fiddlesticks .github/workflows/deploy.yml)
+sites/fiddlesticks/

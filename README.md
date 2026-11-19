@@ -12,7 +12,7 @@ no credentials. Secrets live in Dropbox, never here.
 | www.vawagners.cloud | redirect to the apex |
 | todo.vawagners.cloud | reverse proxy to todo:8787 |
 | exploring-elan.vawagners.cloud | static client `dist`, `/api/*` to myron-api:3001 |
-| fiddlesticks.vawagners.cloud | static, `sites/fiddlesticks` |
+| fiddlesticks.vawagners.cloud | static, `sites/fiddlesticks` (rsynced by the fiddlesticks repo's deploy workflow on every merge to main; not in this repo) |
 | tiamat.vawagners.cloud | static, `/var/www/tiamat` (rsync'd by the Tiamat wiki's `deploy.sh`) |
 | practice.vawagners.cloud | basic auth or the sign-in cookie, then proxy to practice:8770 (piano practice app; see [Practice](#practice)) |
 | gandalf.vawagners.cloud | proxy to gandalf:3000; the app's own accounts (tabletop app; see [Gandalf](#gandalf)) |
@@ -26,7 +26,7 @@ bootstrap.sh      blank box -> Compose host (4 GB swap, docker, ufw, sshd harden
 compose.yaml      caddy, todo, myron-api, myron-bot, practice, practice-convert, gandalf, aint-farm; litellm commented out
 caddy/Caddyfile   TLS (ACME), static sites, reverse proxies
 caddy/practice-signin/  the practice sign-in page (chg-004), mounted into caddy
-sites/            vawagners + fiddlesticks static content (tiamat lives in its own repo)
+sites/            vawagners static content; fiddlesticks is deployed here by its own repo (git-ignored), tiamat lives in its own repo
 litellm/          cold storage; every key comes from env
 scripts/          rebuild.sh, backup.sh, verify.sh, launchd plist; practice-{backup,restore,auth}.sh; gandalf-{backup,restore}.sh
 spec/             spec-flow workspace (specs, plans, gates)
